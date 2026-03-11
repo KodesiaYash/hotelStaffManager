@@ -62,13 +62,13 @@ def llm_extract(message: str) -> dict[str, Any]:
     prompt = (
         "Analyze this WhatsApp message for a sales lead. The service name may be mentioned "
         "along with a number, use your best intelligence to judge if it is the quantity "
-        "of the service sold. If yes, populate the \"Quantity\" field, otherwise default to 1. "
+        'of the service sold. If yes, populate the "Quantity" field, otherwise default to 1. '
         "Respond ONLY with valid JSON in the following format (no extra text, no explanations, "
         "no unnecessary special characters): "
-        "{\"Service\": \"task or ''\", \"Quantity\": \"number or '1'\", \"Date\": \"number or ''\", "
-        "\"Time\": \"number or ''\", \"Guest\": \"name or ''\", \"Room\": \"name or ''\", "
-        "\"Asignee\": \"name or ''\", \"Amount\": number or 0, "
-        "\"confidence\": \"high/medium/low\"} "
+        '{"Service": "task or \'\'", "Quantity": "number or \'1\'", "Date": "number or \'\'", '
+        '"Time": "number or \'\'", "Guest": "name or \'\'", "Room": "name or \'\'", '
+        '"Asignee": "name or \'\'", "Amount": number or 0, '
+        '"confidence": "high/medium/low"} '
         f"Message: {message}"
     )
 
@@ -135,8 +135,5 @@ def process_message(message: str) -> None:
 
 
 if __name__ == "__main__":
-    test_msg2 = (
-        "Service: 2 Hammame\nDate : 04/03/2026 \nGuest:2px \nTime:6:00pm "
-        "\nRoom:The Sahara Room \nArjun Rampal"
-    )
+    test_msg2 = "Service: 2 Hammame\nDate : 04/03/2026 \nGuest:2px \nTime:6:00pm \nRoom:The Sahara Room \nArjun Rampal"
     process_message(test_msg2)
