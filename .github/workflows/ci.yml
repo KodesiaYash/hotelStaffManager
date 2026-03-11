@@ -129,18 +129,23 @@ jobs:
 
   integration-tests:
     runs-on: ubuntu-latest
-    env:
-      GOOGLE_SHEETS_JSON: ${{ secrets.GOOGLE_SHEETS_JSON }}
-      SALES_AUDIT_SHEET_ID: ${{ secrets.SALES_AUDIT_SHEET_ID }}
-      SALES_PRICELIST_SHEET_ID: ${{ secrets.SALES_PRICELIST_SHEET_ID }}
-      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-      ENABLE_WRITE_TESTS: ${{ secrets.ENABLE_WRITE_TESTS }}
-      ENABLE_TESTPY_INTEGRATION: ${{ secrets.ENABLE_TESTPY_INTEGRATION }}
-    if: ${{ env.GOOGLE_SHEETS_JSON != '' && env.SALES_AUDIT_SHEET_ID != '' && env.SALES_PRICELIST_SHEET_ID != '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Check integration secrets
+        id: secrets
+        env:
+          GOOGLE_SHEETS_JSON: ${{ secrets.GOOGLE_SHEETS_JSON }}
+          SALES_AUDIT_SHEET_ID: ${{ secrets.SALES_AUDIT_SHEET_ID }}
+          SALES_PRICELIST_SHEET_ID: ${{ secrets.SALES_PRICELIST_SHEET_ID }}
+        run: |
+          if [[ -n "${GOOGLE_SHEETS_JSON}" && -n "${SALES_AUDIT_SHEET_ID}" && -n "${SALES_PRICELIST_SHEET_ID}" ]]; then
+            echo "has_secrets=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_secrets=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Set up Python
+        if: ${{ steps.secrets.outputs.has_secrets == 'true' }}
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -149,17 +154,25 @@ jobs:
             requirements.txt
             requirements-dev.txt
       - name: Install dependencies
+        if: ${{ steps.secrets.outputs.has_secrets == 'true' }}
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt -r requirements-dev.txt
       - name: Prepare integration secrets
+        if: ${{ steps.secrets.outputs.has_secrets == 'true' }}
+        env:
+          GOOGLE_SHEETS_JSON: ${{ secrets.GOOGLE_SHEETS_JSON }}
         run: |
           mkdir -p /tmp/credentials
           printf '%s' "$GOOGLE_SHEETS_JSON" > /tmp/credentials/service_account.json
       - name: Run integration tests
+        if: ${{ steps.secrets.outputs.has_secrets == 'true' }}
         env:
           PYTHONPATH: .
           GOOGLE_SHEETS_KEY: /tmp/credentials/service_account.json
-          HEALTHCHECK_WRITE: ${{ env.ENABLE_WRITE_TESTS }}
-          HEALTHCHECK_TESTPY: ${{ env.ENABLE_TESTPY_INTEGRATION }}
+          SALES_AUDIT_SHEET_ID: ${{ secrets.SALES_AUDIT_SHEET_ID }}
+          SALES_PRICELIST_SHEET_ID: ${{ secrets.SALES_PRICELIST_SHEET_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          HEALTHCHECK_WRITE: ${{ secrets.ENABLE_WRITE_TESTS }}
+          HEALTHCHECK_TESTPY: ${{ secrets.ENABLE_TESTPY_INTEGRATION }}
         run: pytest -m integration
