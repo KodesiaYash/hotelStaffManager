@@ -7,6 +7,13 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    env:
+      GOOGLE_SHEETS_JSON: ${{ secrets.GOOGLE_SHEETS_JSON }}
+      SALES_AUDIT_SHEET_ID: ${{ secrets.SALES_AUDIT_SHEET_ID }}
+      SALES_PRICELIST_SHEET_ID: ${{ secrets.SALES_PRICELIST_SHEET_ID }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      ENABLE_WRITE_TESTS: ${{ secrets.ENABLE_WRITE_TESTS }}
+      ENABLE_TESTPY_INTEGRATION: ${{ secrets.ENABLE_TESTPY_INTEGRATION }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -34,21 +41,19 @@ jobs:
         run: pytest -m "not integration"
 
       - name: Prepare integration secrets
-        if: ${{ secrets.GOOGLE_SHEETS_JSON != '' && secrets.SALES_AUDIT_SHEET_ID != '' && secrets.SALES_PRICELIST_SHEET_ID != '' }}
-        env:
-          GOOGLE_SHEETS_JSON: ${{ secrets.GOOGLE_SHEETS_JSON }}
+        if: ${{ env.GOOGLE_SHEETS_JSON != '' && env.SALES_AUDIT_SHEET_ID != '' && env.SALES_PRICELIST_SHEET_ID != '' }}
         run: |
           mkdir -p /tmp/credentials
           printf '%s' "$GOOGLE_SHEETS_JSON" > /tmp/credentials/service_account.json
 
       - name: Run integration tests
-        if: ${{ secrets.GOOGLE_SHEETS_JSON != '' && secrets.SALES_AUDIT_SHEET_ID != '' && secrets.SALES_PRICELIST_SHEET_ID != '' }}
+        if: ${{ env.GOOGLE_SHEETS_JSON != '' && env.SALES_AUDIT_SHEET_ID != '' && env.SALES_PRICELIST_SHEET_ID != '' }}
         env:
           PYTHONPATH: .
           GOOGLE_SHEETS_KEY: /tmp/credentials/service_account.json
-          SALES_AUDIT_SHEET_ID: ${{ secrets.SALES_AUDIT_SHEET_ID }}
-          SALES_PRICELIST_SHEET_ID: ${{ secrets.SALES_PRICELIST_SHEET_ID }}
-          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          HEALTHCHECK_WRITE: ${{ secrets.ENABLE_WRITE_TESTS }}
-          HEALTHCHECK_TESTPY: ${{ secrets.ENABLE_TESTPY_INTEGRATION }}
+          SALES_AUDIT_SHEET_ID: ${{ env.SALES_AUDIT_SHEET_ID }}
+          SALES_PRICELIST_SHEET_ID: ${{ env.SALES_PRICELIST_SHEET_ID }}
+          GEMINI_API_KEY: ${{ env.GEMINI_API_KEY }}
+          HEALTHCHECK_WRITE: ${{ env.ENABLE_WRITE_TESTS }}
+          HEALTHCHECK_TESTPY: ${{ env.ENABLE_TESTPY_INTEGRATION }}
         run: pytest -m integration
