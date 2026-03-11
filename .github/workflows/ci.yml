@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt -r requirements-dev.txt
+      - name: Ruff lint
+        run: python -m ruff check .
+      - name: Ruff format
+        run: python -m ruff format --check .
+      - name: Mypy
+        run: python -m mypy .
+      - name: Bandit
+        run: python -m bandit -c bandit.yaml -r .
+      - name: Pip audit
+        run: python -m pip_audit -r requirements.txt -r requirements-dev.txt
+      - name: Run unit tests
+        env:
+          PYTHONPATH: .
+        run: pytest -m "not integration"
+
+      - name: Prepare integration secrets
+        if: ${{ secrets.GOOGLE_SHEETS_JSON != '' && secrets.SALES_AUDIT_SHEET_ID != '' && secrets.SALES_PRICELIST_SHEET_ID != '' }}
+        env:
+          GOOGLE_SHEETS_JSON: ${{ secrets.GOOGLE_SHEETS_JSON }}
+        run: |
+          mkdir -p /tmp/credentials
+          printf '%s' "$GOOGLE_SHEETS_JSON" > /tmp/credentials/service_account.json
+
+      - name: Run integration tests
+        if: ${{ secrets.GOOGLE_SHEETS_JSON != '' && secrets.SALES_AUDIT_SHEET_ID != '' && secrets.SALES_PRICELIST_SHEET_ID != '' }}
+        env:
+          PYTHONPATH: .
+          GOOGLE_SHEETS_KEY: /tmp/credentials/service_account.json
+          SALES_AUDIT_SHEET_ID: ${{ secrets.SALES_AUDIT_SHEET_ID }}
+          SALES_PRICELIST_SHEET_ID: ${{ secrets.SALES_PRICELIST_SHEET_ID }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          HEALTHCHECK_WRITE: ${{ secrets.ENABLE_WRITE_TESTS }}
+          HEALTHCHECK_TESTPY: ${{ secrets.ENABLE_TESTPY_INTEGRATION }}
+        run: pytest -m integration

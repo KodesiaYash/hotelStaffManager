@@ -138,7 +138,10 @@ celerybeat.pid
 .env
 .envrc
 .venv
+env
 env/
+envConfig/
+myenv/
 venv/
 ENV/
 env.bak/
@@ -194,6 +197,9 @@ cython_debug/
 # PyPI configuration file
 .pypirc
 
+# Pip-audit cache
+.pip-audit-cache/
+
 # Cursor
 #  Cursor is an AI-powered code editor. `.cursorignore` specifies files/directories to
 #  exclude from AI features like autocomplete and code analysis. Recommended for sensitive data
@@ -205,3 +211,6 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# macOS
+.DS_Store
