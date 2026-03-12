@@ -11,7 +11,7 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from control.bot.salesBot.test import process_message  # noqa: E402
+from control.bot.salesBot.brain import process_message  # noqa: E402
 
 app = Flask(__name__)
 

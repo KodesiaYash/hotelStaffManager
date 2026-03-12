@@ -96,9 +96,9 @@ def test_process_message_pipeline() -> None:
 
     os.environ.setdefault("GEMINI_API_KEY", "DUMMY")
 
-    from control.bot.salesBot import test as test_module
+    from control.bot.salesBot import brain as brain_module
 
-    marker = f"PYTEST_TESTPY_{datetime.utcnow().isoformat()}"
+    marker = f"PYTEST_BRAIN_{datetime.utcnow().isoformat()}"
     fake_payload = {
         "Service": marker,
         "Quantity": 1,
@@ -111,16 +111,16 @@ def test_process_message_pipeline() -> None:
         "confidence": "high",
     }
 
-    original_llm_extract = test_module.llm_extract
+    original_llm_extract = brain_module.llm_extract
 
     def _fake_extract(_message: str) -> dict[str, Any]:
         return fake_payload
 
-    test_module.llm_extract = _fake_extract  # type: ignore[assignment]
+    brain_module.llm_extract = _fake_extract  # type: ignore[assignment]
     try:
-        test_module.process_message("healthcheck")
+        brain_module.process_message("healthcheck")
     finally:
-        test_module.llm_extract = original_llm_extract
+        brain_module.llm_extract = original_llm_extract
 
     audit = SalesAudit()
     worksheet = audit.connector.get_worksheet(audit.details_key)
