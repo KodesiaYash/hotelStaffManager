@@ -1,6 +1,6 @@
 # hotelStaffManager
 
-## Overview
+## Overview 
 This service ingests WhatsApp-style sales messages, extracts structured fields using Gemini, and logs the results into Google Sheets. Pricing is calculated from a separate pricelist sheet.
 
 ## Local Setup
@@ -110,9 +110,10 @@ Optional:
 flowchart TD
   User["Client / WhatsApp message"] --> API["Flask API /process"]
   API --> Extract["Gemini extraction"]
-  Extract --> Cost["SalesAudit.calculate_cost"]
-  Cost --> Price["PriceList (Google Sheet)"]
   Extract --> Write["SalesAudit.write_details_sheet"]
+  Write --> Price["PriceList (Google Sheet)"]
+  Price --> Cost["Calculate cost from PriceList"]
+  Cost --> Write
   Write --> Audit["Sales Audit Sheet"]
 ```
 
@@ -143,8 +144,8 @@ graph TD
 - **Permission denied on sheets**: share the sheets with the service account email.
 - **Gemini errors**: confirm `GEMINI_API_KEY` is valid and has quota.
 
-## EVB Pattern (Brief)
-This project follows an **EVB (Entity–Boundary–Control)** pattern:
+## ECB Pattern (Brief)
+This project follows an **ECB (Entity–Boundary–Control)** pattern:
 - **Entity**: core domain data (stored in Google Sheets).
 - **Boundary**: external interfaces/adapters (Sheets connector, API server).
 - **Control**: orchestration and business logic (`salesBot/brain.py`).
