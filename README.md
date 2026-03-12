@@ -120,8 +120,10 @@ flowchart TD
 ## Module Guide
 ```mermaid
 graph TD
-  App["boundary/server/app.py"] --> Test["control/bot/salesBot/brain.py"]
-  Test --> Audit["boundary/storageInterface/salesAudit.py"]
+  App["boundary/server/app.py"] --> Brain["control/bot/salesBot/brain.py"]
+  Brain --> LLM["boundary/llminterface/gemini_interface.py"]
+  Brain --> Utils["shared/utils.py"]
+  Brain --> Audit["boundary/storageInterface/salesAudit.py"]
   Audit --> Price["boundary/storageInterface/priceList.py"]
   Audit --> Sheets["boundary/storageInterface/sheetsConnector.py"]
   Price --> Sheets
@@ -136,6 +138,10 @@ graph TD
   - Calculates cost using the pricelist data.
 - `control/bot/salesBot/brain.py`
   - Message extraction and orchestration logic.
+- `boundary/llminterface/gemini_interface.py`
+  - Gemini client wrapper with fixed model/config.
+- `shared/utils.py`
+  - Shared helpers (e.g., `safe_json_parse`).
 - `boundary/server/app.py`
   - Flask API entrypoint.
 
