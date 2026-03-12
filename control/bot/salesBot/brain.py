@@ -35,7 +35,17 @@ def _get_sales_audit() -> SalesAudit:
     return _sales_audit
 
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+_genai_client: genai.Client | None = None
+
+
+def _get_genai_client() -> genai.Client:
+    global _genai_client
+    if _genai_client is None:
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY is not set")
+        _genai_client = genai.Client(api_key=api_key)
+    return _genai_client
 
 
 def safe_json_parse(text: str | None) -> dict[str, Any]:
@@ -72,6 +82,7 @@ def llm_extract(message: str) -> dict[str, Any]:
         f"Message: {message}"
     )
 
+    client = _get_genai_client()
     response = client.models.generate_content(
         model="gemini-2.5-flash",
         contents={"text": prompt},
