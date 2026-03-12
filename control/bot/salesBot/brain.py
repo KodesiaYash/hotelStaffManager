@@ -1,19 +1,31 @@
 from __future__ import annotations
 
-import json
 import os
-import re
 import sys
 from typing import Any
 
 from dotenv import load_dotenv
-from google import genai
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", ".."))
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
+from boundary.llminterface import GeminiInterface  # noqa: E402
 from boundary.storageInterface.salesAudit import SalesAudit  # noqa: E402
+from shared.utils import safe_json_parse  # noqa: E402
+
+DEFAULT_PROMPT = (
+    "Analyze this WhatsApp message for a sales lead. The service name may be mentioned "
+    "along with a number, use your best intelligence to judge if it is the quantity "
+    'of the service sold. If yes, populate the "Quantity" field, otherwise default to 1. '
+    "Respond ONLY with valid JSON in the following format (no extra text, no explanations, "
+    "no unnecessary special characters): "
+    '{{"Service": "task or \'\'", "Quantity": "number or \'1\'", "Date": "number or \'\'", '
+    '"Time": "number or \'\'", "Guest": "name or \'\'", "Room": "name or \'\'", '
+    '"Asignee": "name or \'\'", "Amount": number or 0, '
+    '"confidence": "high/medium/low"}} '
+    "Message: {message}"
+)
 
 
 def _load_env_files() -> None:
@@ -26,6 +38,7 @@ def _load_env_files() -> None:
 _load_env_files()
 
 _sales_audit: SalesAudit | None = None
+_llm_interface: GeminiInterface | None = None
 
 
 def _get_sales_audit() -> SalesAudit:
@@ -35,87 +48,24 @@ def _get_sales_audit() -> SalesAudit:
     return _sales_audit
 
 
-_genai_client: genai.Client | None = None
-
-
-def _get_genai_client() -> genai.Client:
-    global _genai_client
-    if _genai_client is None:
-        api_key = os.getenv("GEMINI_API_KEY")
-        if not api_key:
-            raise ValueError("GEMINI_API_KEY is not set")
-        _genai_client = genai.Client(api_key=api_key)
-    return _genai_client
-
-
-def safe_json_parse(text: str | None) -> dict[str, Any]:
-    """Clean + parse Gemini JSON responses."""
-    if not text:
-        return {"error": "empty_response"}
-
-    cleaned = text.strip()
-    cleaned = re.sub(r"```json\s*|\s*```", "", cleaned, flags=re.IGNORECASE).strip()
-    cleaned = re.sub(r"([\{\}\[\]])", r" \1 ", cleaned)
-    cleaned = cleaned.replace("\\n", "").replace("\\t", "")
-
-    try:
-        return json.loads(cleaned)
-    except json.JSONDecodeError as exc:
-        print(f"JSON Error: {exc}")
-        print(f"Raw (first 100): {text[:100]!r}")
-        print(f"Cleaned: {cleaned[:100]!r}")
-        return {"error": "parse_failed", "raw": cleaned}
+def _get_llm_interface() -> GeminiInterface:
+    global _llm_interface
+    if _llm_interface is None:
+        _llm_interface = GeminiInterface()
+    return _llm_interface
 
 
 def llm_extract(message: str) -> dict[str, Any]:
     """LLM extracts structured data from message using Gemini."""
-    prompt = (
-        "Analyze this WhatsApp message for a sales lead. The service name may be mentioned "
-        "along with a number, use your best intelligence to judge if it is the quantity "
-        'of the service sold. If yes, populate the "Quantity" field, otherwise default to 1. '
-        "Respond ONLY with valid JSON in the following format (no extra text, no explanations, "
-        "no unnecessary special characters): "
-        '{"Service": "task or \'\'", "Quantity": "number or \'1\'", "Date": "number or \'\'", '
-        '"Time": "number or \'\'", "Guest": "name or \'\'", "Room": "name or \'\'", '
-        '"Asignee": "name or \'\'", "Amount": number or 0, '
-        '"confidence": "high/medium/low"} '
-        f"Message: {message}"
-    )
+    prompt = DEFAULT_PROMPT.format(message=message)
 
-    client = _get_genai_client()
-    response = client.models.generate_content(
-        model="gemini-2.5-flash",
-        contents={"text": prompt},
-        config={
-            "temperature": 0,
-            "response_mime_type": "application/json",
-        },
-    )
-    try:
-        extracted = safe_json_parse(response.text)
-        client.close()
-        return extracted
-    except json.JSONDecodeError:
+    response_text = _get_llm_interface().generate(prompt)
+    extracted = safe_json_parse(response_text)
+    if extracted.get("error") == "parse_failed":
         prompt = f"{prompt}\nCRITICAL: Pure JSON, no extra text."
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents={"text": prompt},
-            config={
-                "temperature": 0,
-                "response_mime_type": "application/json",
-            },
-        )
-        client.close()
-        return {"error": "Parse failed", "raw": response}
-
-
-def update_costs(service: str, quantity: Any) -> float:
-    """Read costs sheet, find matching cost, log."""
-    try:
-        return _get_sales_audit().calculate_cost(service, quantity)
-    except Exception as exc:
-        print(f"Cost lookup failed: {exc}")
-        return 0.0
+        response_text = _get_llm_interface().generate(prompt)
+        extracted = safe_json_parse(response_text)
+    return extracted
 
 
 def process_message(message: str) -> None:
@@ -124,10 +74,8 @@ def process_message(message: str) -> None:
         print("Extraction failed:", extracted)
         return
 
-    cost = update_costs(str(extracted.get("Service", "")), extracted.get("Quantity", 1))
-
     try:
-        _get_sales_audit().write_details_sheet(
+        cost = _get_sales_audit().write_details_sheet(
             [
                 extracted.get("Service", ""),
                 extracted.get("Quantity", ""),
@@ -136,7 +84,6 @@ def process_message(message: str) -> None:
                 extracted.get("Guest", ""),
                 extracted.get("Room", ""),
                 extracted.get("Asignee", ""),
-                cost,
             ]
         )
     except Exception as exc:

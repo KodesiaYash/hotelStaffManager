@@ -77,8 +77,27 @@ class SalesAudit:
     def read_details_sheet(self) -> list[dict[str, Any]]:
         return self.connector.read_all_records(self.details_key)
 
-    def write_details_sheet(self, data: Sequence[Any]) -> None:
-        self.connector.append_row(self.details_key, list(data))
+    def write_details_sheet(self, data: Sequence[Any]) -> float:
+        row = list(data)
+        while len(row) < 7:
+            row.append("")
+
+        cost: float | None = None
+        if len(row) >= 8:
+            cost = _parse_number(row[7])
+
+        if cost is None:
+            service = str(row[0]) if row else ""
+            quantity = row[1] if len(row) > 1 else 1
+            cost = self.calculate_cost(service, quantity)
+
+        if len(row) < 8:
+            row.append(cost)
+        else:
+            row[7] = cost
+
+        self.connector.append_row(self.details_key, row)
+        return float(cost)
 
     def read_costs_sheet(self) -> list[dict[str, Any]]:
         if not self.pricelist:
@@ -197,8 +216,8 @@ def read_details_sheet() -> list[dict[str, Any]]:
     return _get_default_audit().read_details_sheet()
 
 
-def write_details_sheet(data: Sequence[Any]) -> None:
-    _get_default_audit().write_details_sheet(data)
+def write_details_sheet(data: Sequence[Any]) -> float:
+    return _get_default_audit().write_details_sheet(data)
 
 
 def read_costs_sheet() -> list[dict[str, Any]]:
