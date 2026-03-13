@@ -24,11 +24,11 @@ else
 fi
 
 echo "==> Pytest (unit)"
-pytest -m "not integration"
+pytest tests/unit
 
 if [[ "${RUN_INTEGRATION:-}" == "1" ]]; then
   echo "==> Pytest (integration)"
-  pytest -m integration
+  pytest tests/integration -m integration
 fi
 
 echo "All checks passed."

@@ -124,7 +124,7 @@ jobs:
       - name: Run unit tests
         env:
           PYTHONPATH: .
-        run: pytest -m "not integration"
+        run: pytest tests/unit
 
   integration-tests:
     runs-on: ubuntu-latest
@@ -174,4 +174,4 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           HEALTHCHECK_WRITE: ${{ secrets.ENABLE_WRITE_TESTS }}
           HEALTHCHECK_TESTPY: ${{ secrets.ENABLE_TESTPY_INTEGRATION }}
-        run: pytest -m integration
+        run: pytest tests/integration -m integration
