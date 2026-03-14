@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, TypedDict
+
 import pytest
 import requests
 
@@ -15,9 +17,14 @@ class DummyHTTPError(RuntimeError):
         self.status_code = status_code
 
 
+class RetryCallbackState(TypedDict):
+    count: int
+    retries: list[tuple[int, type[BaseException]]]
+
+
 def test_retry_call_retries_on_request_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     """Retry until success for retryable request exceptions."""
-    calls = {"count": 0}
+    calls: dict[str, int] = {"count": 0}
 
     def func() -> str:
         calls["count"] += 1
@@ -34,7 +41,7 @@ def test_retry_call_retries_on_request_exception(monkeypatch: pytest.MonkeyPatch
 
 def test_retry_call_does_not_retry_non_retry_exception(monkeypatch: pytest.MonkeyPatch) -> None:
     """Do not retry exceptions that are not marked retryable."""
-    calls = {"count": 0}
+    calls: dict[str, int] = {"count": 0}
 
     def func() -> str:
         calls["count"] += 1
@@ -48,7 +55,7 @@ def test_retry_call_does_not_retry_non_retry_exception(monkeypatch: pytest.Monke
 
 def test_retry_call_retries_on_retry_status_code(monkeypatch: pytest.MonkeyPatch) -> None:
     """Retry when the error has a retryable HTTP status code."""
-    calls = {"count": 0}
+    calls: dict[str, int] = {"count": 0}
 
     def func() -> str:
         calls["count"] += 1
@@ -66,7 +73,7 @@ def test_retry_call_does_not_retry_on_non_retry_status_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Do not retry when the error status code is not retryable."""
-    calls = {"count": 0}
+    calls: dict[str, int] = {"count": 0}
 
     def func() -> str:
         calls["count"] += 1
@@ -80,7 +87,7 @@ def test_retry_call_does_not_retry_on_non_retry_status_code(
 
 def test_retry_call_invokes_on_retry_callback(monkeypatch: pytest.MonkeyPatch) -> None:
     """Invoke the on_retry callback for each retry attempt."""
-    calls = {"count": 0, "retries": []}
+    calls: RetryCallbackState = {"count": 0, "retries": []}
 
     def func() -> str:
         calls["count"] += 1
@@ -114,11 +121,23 @@ def test_retrying_whapi_client_retries_send_text(monkeypatch: pytest.MonkeyPatch
         def __init__(self) -> None:
             self.calls = 0
 
-        def send_text(self, *args, **kwargs) -> dict[str, str]:
+        def send_text(self, *args: Any, **kwargs: Any) -> dict[str, str]:
             self.calls += 1
             if self.calls < 3:
                 raise requests.RequestException("boom")
             return {"status": "ok"}
+
+        def send_notification(self, *args: Any, **kwargs: Any) -> dict[str, str]:
+            return self.send_text(*args, **kwargs)
+
+        def send_image(self, *args: Any, **kwargs: Any) -> dict[str, str]:
+            return self.send_text(*args, **kwargs)
+
+        def send_video(self, *args: Any, **kwargs: Any) -> dict[str, str]:
+            return self.send_text(*args, **kwargs)
+
+        def send_document(self, *args: Any, **kwargs: Any) -> dict[str, str]:
+            return self.send_text(*args, **kwargs)
 
     client = DummyClient()
     wrapper = RetryingWhapiClient(client, policy=RetryPolicy(max_attempts=3, jitter=0.0))

@@ -34,7 +34,7 @@ class RetryPolicy:
 
     def next_delay(self, attempt: int) -> float:
         exponential = min(self.base_delay * (2 ** max(attempt - 1, 0)), self.max_delay)
-        jitter = random.uniform(0, self.jitter) if self.jitter > 0 else 0.0
+        jitter = random.uniform(0, self.jitter) if self.jitter > 0 else 0.0  # nosec B311
         return exponential + jitter
 
 

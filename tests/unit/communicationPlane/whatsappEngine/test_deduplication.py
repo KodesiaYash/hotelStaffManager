@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from communicationPlane.whatsappEngine.deduplication.in_memory_store import (
     InMemoryDeduplicator as DevInMemoryDeduplicator,
 )
@@ -23,7 +25,7 @@ def test_in_memory_deduplicator_reset_clears_store() -> None:
     assert dedup.is_duplicate("alpha") is False
 
 
-def test_in_memory_deduplicator_ttl_expiry(monkeypatch) -> None:
+def test_in_memory_deduplicator_ttl_expiry(monkeypatch: pytest.MonkeyPatch) -> None:
     """Expire keys after TTL elapses."""
     times = iter([0.0, 2.0])
     monkeypatch.setattr(dedup_module.time, "time", lambda: next(times))
@@ -32,7 +34,9 @@ def test_in_memory_deduplicator_ttl_expiry(monkeypatch) -> None:
     assert dedup.is_duplicate("alpha") is False
 
 
-def test_in_memory_deduplicator_zero_ttl_never_expires(monkeypatch) -> None:
+def test_in_memory_deduplicator_zero_ttl_never_expires(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Treat TTL=0 as 'never expire' while retaining duplicates."""
     times = iter([0.0, 100.0])
     monkeypatch.setattr(dedup_module.time, "time", lambda: next(times))
@@ -41,7 +45,7 @@ def test_in_memory_deduplicator_zero_ttl_never_expires(monkeypatch) -> None:
     assert dedup.is_duplicate("alpha") is True
 
 
-def test_in_memory_deduplicator_eviction_when_full(monkeypatch) -> None:
+def test_in_memory_deduplicator_eviction_when_full(monkeypatch: pytest.MonkeyPatch) -> None:
     """Evict the oldest key when max_entries is reached."""
     times = iter([0.0, 1.0, 2.0, 3.0])
     monkeypatch.setattr(dedup_module.time, "time", lambda: next(times))

@@ -38,5 +38,5 @@ class InMemoryDeduplicator:
     def _evict_oldest(self) -> None:
         if not self._store:
             return
-        oldest_key = min(self._store, key=self._store.get)
+        oldest_key = min(self._store, key=lambda key: self._store[key])
         self._store.pop(oldest_key, None)

@@ -25,14 +25,17 @@ _load_env_files()
 class ControlPlaneInterface:
     def __init__(self, sales_bot_handler: SalesBotHandler | None = None) -> None:
         if sales_bot_handler is None:
-            from controlplane.control.bot.salesbot.brain import process_message as sales_bot_handler
-        self._sales_bot_handler = sales_bot_handler
+            from controlplane.control.bot.salesbot.brain import process_message as default_handler
+
+            sales_bot_handler = default_handler
+        if sales_bot_handler is None:
+            raise RuntimeError("Sales bot handler is not configured")
+        self._sales_bot_handler: SalesBotHandler = sales_bot_handler
         self._sales_group_id = (os.getenv("SALES_GROUP_ID") or "").strip()
 
     def process(self, message: ChatMessage) -> None:
-        if message.source == "whapi" and self._sales_group_id:
-            if message.chat_id != self._sales_group_id:
-                return
+        if message.source == "whapi" and self._sales_group_id and message.chat_id != self._sales_group_id:
+            return
         if not message.text:
             return
         self._sales_bot_handler(message.text)

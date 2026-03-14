@@ -1,9 +1,8 @@
 from __future__ import annotations
 
 import hashlib
-from typing import Any
+from typing import Any, Protocol
 
-from controlplane.control.control_plane_interface import ControlPlaneInterface
 from models.chat_message import ChatMessage
 from models.deduplication import Deduplicator, InMemoryDeduplicator
 from models.whapi import WhapiMessage
@@ -21,14 +20,18 @@ def build_dedup_id(message: WhapiMessage) -> str:
             message.text or "",
         ]
     )
-    digest = hashlib.sha1(base.encode("utf-8")).hexdigest()[:16]
+    digest = hashlib.sha256(base.encode("utf-8")).hexdigest()[:16]
     return f"whapi:{message.chat_id}:{message.from_id or 'unknown'}:{int(message.timestamp)}:{digest}"
+
+
+class ChatMessageHandler(Protocol):
+    def process(self, message: ChatMessage) -> None: ...
 
 
 class WhatsAppEngine:
     def __init__(
         self,
-        control_plane: ControlPlaneInterface,
+        control_plane: ChatMessageHandler,
         *,
         deduplicator: Deduplicator | None = None,
         ignore_from_me: bool = True,
