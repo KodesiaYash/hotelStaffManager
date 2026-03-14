@@ -1,7 +1,98 @@
 # hotelStaffManager
 
-## Overview 
+## Overview
 This service ingests WhatsApp-style sales messages, extracts structured fields using Gemini, and logs the results into Google Sheets. Pricing is calculated from a separate pricelist sheet.
+
+## High-Level Architecture
+- **communicationPlane**: Web/API ingress and WhatsApp integration.
+- **controlplane**: Orchestration and business logic (SalesBot).
+- **models**: Shared dataclasses used across layers.
+- **shared**: Small cross-cutting helpers.
+
+## Code Flow
+```mermaid
+flowchart TD
+  User["Client / WhatsApp message"] --> Webhook["/whapi/webhook"]
+  User --> API["/process"]
+  Webhook --> Engine["WhatsAppEngine.process_payload"]
+  API --> Chat["ChatMessage"]
+  Engine --> Chat
+  Chat --> Control["ControlPlaneInterface.process"]
+  Control --> Brain["SalesBot brain.process_message"]
+  Brain --> Extract["Gemini extraction"]
+  Extract --> Write["SalesAudit.write_details_sheet"]
+  Write --> Price["PriceList.read_pricelist"]
+  Price --> Cost["Calculate cost"]
+  Cost --> Write
+  Write --> Audit["Sales Audit Sheet"]
+```
+
+## Module Guide
+```mermaid
+graph TD
+  App["communicationPlane/server/app.py"] --> Control["controlplane/control/control_plane_interface.py"]
+  App -.-> Webhook["communicationPlane/whatsappEngine/whapiInterface/webhook.py"]
+  Webhook --> Engine["communicationPlane/whatsappEngine/engine.py"]
+  Engine --> Control
+  Engine --> Dedup["communicationPlane/whatsappEngine/deduplication/in_memory_store.py"]
+  Control --> Brain["controlplane/control/bot/salesbot/brain.py"]
+  Brain --> LLM["controlplane/boundary/llminterface/gemini_interface.py"]
+  Brain --> Utils["shared/utils.py"]
+  Brain --> Audit["controlplane/boundary/storageInterface/salesAudit.py"]
+  Audit --> Price["controlplane/boundary/storageInterface/priceList.py"]
+  Audit --> Sheets["controlplane/boundary/storageInterface/sheetsConnector.py"]
+  Price --> Sheets
+  Webhook --> Whapi["communicationPlane/whatsappEngine/whapiInterface/whapi_client.py"]
+  Retry["communicationPlane/whatsappEngine/retry/retry_policy.py"] --> Whapi
+  Models["models/*.py"] -.-> Engine
+  Models -.-> Webhook
+  Models -.-> Dedup
+  Models -.-> Retry
+  Models -.-> Whapi
+```
+
+### Key Modules
+- `controlplane/boundary/storageInterface/sheetsConnector.py`
+  - Shared connector for Google Sheets, handles auth and worksheet selection.
+- `controlplane/boundary/storageInterface/priceList.py`
+  - Read/write wrapper around the sales pricelist sheet.
+- `controlplane/boundary/storageInterface/salesAudit.py`
+  - Read/write wrapper around the sales audit sheet.
+  - Calculates cost using the pricelist data.
+- `controlplane/control/control_plane_interface.py`
+  - Dispatches `ChatMessage` to the right bot (currently SalesBot).
+  - For WhatsApp, only processes messages from `SALES_GROUP_ID`.
+- `controlplane/control/bot/salesbot/brain.py`
+  - Message extraction and orchestration logic.
+- `controlplane/boundary/llminterface/gemini_interface.py`
+  - Gemini client wrapper with fixed model/config.
+- `shared/utils.py`
+  - Shared helpers (e.g., `safe_json_parse`).
+- `communicationPlane/whatsappEngine/engine.py`
+  - Ingests WHAPI payloads, generates dedup IDs, converts to `ChatMessage`, and calls the control plane.
+  - Ignores `from_me` messages by default.
+- `communicationPlane/whatsappEngine/whapiInterface/whapi_client.py`
+  - WHAPI client for sending WhatsApp notifications.
+- `communicationPlane/whatsappEngine/whapiInterface/webhook.py`
+  - Webhook parsing and Flask blueprint helpers.
+- `communicationPlane/whatsappEngine/deduplication/in_memory_store.py`
+  - In-memory deduplication for message IDs.
+- `communicationPlane/whatsappEngine/retry/retry_policy.py`
+  - Retry wrapper for WHAPI client calls.
+- `models/chat_message.py`
+  - Generic inbound message shape used by the control plane.
+- `models/whapi.py`
+  - Shared dataclasses for WHAPI config and messages.
+- `models/deduplication.py`
+  - Shared dataclasses for in-memory deduplication.
+- `models/retry.py`
+  - Shared retry dataclasses and helpers.
+- `communicationPlane/server/app.py`
+  - Flask API entrypoint (`/process`, `/whapi/webhook`).
+
+### Dedup ID Strategy (WHAPI)
+- Prefer the WHAPI message `id` when present.
+- If it is missing, derive a stable ID from `chat_id`, `from`, `timestamp`, `type`, and `text` and hash it.
 
 ## Local Setup
 ### 1) Install dependencies
@@ -17,19 +108,18 @@ GEMINI_API_KEY=...
 GOOGLE_SHEETS_KEY=envConfig/sales/salesAccount.json
 SALES_AUDIT_SHEET_ID=...
 SALES_PRICELIST_SHEET_ID=...
+
+# WhatsApp (optional)
+WHAPI_TOKEN=...
+WHAPI_BASE_URL=https://gate.whapi.cloud
+WHAPI_TOKEN_IN_QUERY=0
+WHAPI_TIMEOUT=20
+SALES_GROUP_ID=...
 ```
 
 Notes:
 - `GOOGLE_SHEETS_KEY` can be relative; it resolves against the project root.
 - Share both sheets with the Google service account email.
-
-Optional (WHAPI):
-```
-WHAPI_TOKEN=...
-WHAPI_BASE_URL=https://gate.whapi.cloud
-WHAPI_TOKEN_IN_QUERY=0
-WHAPI_TIMEOUT=20
-```
 
 ### 3) Run the server
 ```bash
@@ -43,6 +133,12 @@ curl -X POST http://127.0.0.1:5000/process \
   -H "Content-Type: application/json" \
   -d '{"message":"Service: 2 Hammame\nDate: 04/03/2026\nGuest:2px\nTime:6:00pm\nRoom:The Sahara Room\nArjun Rampal"}'
 ```
+
+## Webhook Setup (WHAPI)
+- Webhook URL: `https://<your-domain>/whapi/webhook`
+- Use **POST + Body mode** in WHAPI.
+- Ensure your endpoint is **public HTTPS**.
+- Messages are deduplicated and `from_me` messages are ignored unless configured otherwise.
 
 ## Local Testing
 ### Run all checks (recommended)
@@ -60,7 +156,7 @@ python -m ruff check .
 python -m ruff format --check .
 python -m mypy .
 python -m bandit -c bandit.yaml -r .
-python -m pip_audit -r requirements.txt -r requirements-dev.txt
+python -m pip_audit -r requirements.txt -r requirements-dev.txt --no-deps --disable-pip
 pytest tests/unit
 ```
 
@@ -109,7 +205,7 @@ CI runs on pull requests only. Jobs are parallelized for faster feedback.
 - Security lint for risky patterns (e.g., shell injection, weak crypto).
 
 ### `pip-audit`
-- Runs `pip_audit -r requirements.txt -r requirements-dev.txt`
+- Runs `pip_audit -r requirements.txt -r requirements-dev.txt --no-deps --disable-pip`
 - Checks dependencies for known CVEs.
 
 ### `unit-tests`
@@ -132,92 +228,28 @@ Optional:
 - `ENABLE_WRITE_TESTS` (set to `1`)
 - `ENABLE_TESTPY_INTEGRATION` (set to `1`)
 
-## Code Flow
-```mermaid
-flowchart TD
-  User["Client / WhatsApp message"] --> Webhook["/whapi/webhook"]
-  User --> API["/process"]
-  Webhook --> Engine["WhatsAppEngine.process_payload"]
-  API --> Chat["ChatMessage"]
-  Engine --> Chat
-  Chat --> Control["ControlPlaneInterface.process"]
-  Control --> Brain["SalesBot brain.process_message"]
-  Brain --> Extract["Gemini extraction"]
-  Extract --> Write["SalesAudit.write_details_sheet"]
-  Write --> Price["PriceList.read_pricelist"]
-  Price --> Cost["Calculate cost"]
-  Cost --> Write
-  Write --> Audit["Sales Audit Sheet"]
-```
+## Contributing
+### Branching
+- Create a feature branch off `main`.
+- Use descriptive branch names (e.g., `feature/whapi-routing`).
 
-## Module Guide
-```mermaid
-graph TD
-  App["communicationPlane/server/app.py"] --> Control["controlplane/control/control_plane_interface.py"]
-  App -.-> Webhook["communicationPlane/whatsappEngine/whapiInterface/webhook.py"]
-  Webhook --> Engine["communicationPlane/whatsappEngine/engine.py"]
-  Engine --> Control
-  Engine --> Dedup["communicationPlane/whatsappEngine/deduplication/in_memory_store.py"]
-  Control --> Brain["controlplane/control/bot/salesbot/brain.py"]
-  Brain --> LLM["controlplane/boundary/llminterface/gemini_interface.py"]
-  Brain --> Utils["shared/utils.py"]
-  Brain --> Audit["controlplane/boundary/storageInterface/salesAudit.py"]
-  Audit --> Price["controlplane/boundary/storageInterface/priceList.py"]
-  Audit --> Sheets["controlplane/boundary/storageInterface/sheetsConnector.py"]
-  Price --> Sheets
-  Webhook --> Whapi["communicationPlane/whatsappEngine/whapiInterface/whapi_client.py"]
-  Retry["communicationPlane/whatsappEngine/retry/retry_policy.py"] --> Whapi
-  Models["models/*.py"] -.-> Engine
-  Models -.-> Webhook
-  Models -.-> Dedup
-  Models -.-> Retry
-  Models -.-> Whapi
-```
+### Code Style
+- Use `ruff` for linting and formatting.
+- Run `scripts/run_checks.sh` before opening a PR.
 
-- `controlplane/boundary/storageInterface/sheetsConnector.py`
-  - Shared connector for Google Sheets, handles auth and worksheet selection.
-- `controlplane/boundary/storageInterface/priceList.py`
-  - Read/write wrapper around the sales pricelist sheet.
-- `controlplane/boundary/storageInterface/salesAudit.py`
-  - Read/write wrapper around the sales audit sheet.
-  - Calculates cost using the pricelist data.
-- `controlplane/control/control_plane_interface.py`
-  - Dispatches `ChatMessage` to the right bot (currently SalesBot).
-- `controlplane/control/bot/salesbot/brain.py`
-  - Message extraction and orchestration logic.
-- `controlplane/boundary/llminterface/gemini_interface.py`
-  - Gemini client wrapper with fixed model/config.
-- `shared/utils.py`
-  - Shared helpers (e.g., `safe_json_parse`).
-- `communicationPlane/whatsappEngine/engine.py`
-  - Ingests WHAPI payloads, generates dedup IDs, converts to `ChatMessage`, and calls the control plane.
-- `communicationPlane/whatsappEngine/whapiInterface/whapi_client.py`
-  - WHAPI client for sending WhatsApp notifications.
-- `communicationPlane/whatsappEngine/whapiInterface/webhook.py`
-  - Webhook parsing and Flask blueprint helpers.
-- `communicationPlane/whatsappEngine/deduplication/in_memory_store.py`
-  - In-memory deduplication for message IDs.
-- `communicationPlane/whatsappEngine/retry/retry_policy.py`
-  - Retry wrapper for WHAPI client calls.
-- `models/chat_message.py`
-  - Generic inbound message shape used by the control plane.
-- `models/whapi.py`
-  - Shared dataclasses for WHAPI config and messages.
-- `models/deduplication.py`
-  - Shared dataclasses for in-memory deduplication.
-- `models/retry.py`
-  - Shared retry dataclasses and helpers.
-- `communicationPlane/server/app.py`
-  - Flask API entrypoint.
+### Tests
+- Add unit tests under `tests/unit` for new logic.
+- Only add integration tests if they hit external services, and mark them `@pytest.mark.integration`.
 
-### Dedup ID Strategy (WHAPI)
-- Prefer the WHAPI message `id` when present.
-- If it is missing, derive a stable ID from `chat_id`, `from`, `timestamp`, `type`, and `text` and hash it.
+### Pull Requests
+- Include a summary, screenshots/logs if relevant, and test output.
+- Ensure CI passes.
 
 ## Troubleshooting
 - **Service account file not found**: check `GOOGLE_SHEETS_KEY` path.
 - **Permission denied on sheets**: share the sheets with the service account email.
 - **Gemini errors**: confirm `GEMINI_API_KEY` is valid and has quota.
+- **WHAPI webhook not firing**: ensure public HTTPS and POST + Body mode.
 
 ## ECB Pattern (Brief)
 This project follows an **ECB (Entity–Boundary–Control)** pattern:
