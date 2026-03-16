@@ -275,7 +275,6 @@ curl -i https://kodesia.tech/process
 ```bash
 curl -i --resolve kodesia.tech:443:172.67.139.224 https://kodesia.tech/process
 ```
-
 ### Test layout
 - `tests/unit/communicationPlane/whatsappEngine/`: WhatsApp engine unit tests (dedup, retry, engine, webhook).
 - `tests/unit/controlplane/salesbot/`: SalesBot brain unit tests.
