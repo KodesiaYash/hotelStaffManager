@@ -153,7 +153,7 @@ jobs:
           TUNNEL_TOKEN: ${{ secrets.TUNNEL_TOKEN }}
         run: |
           set +e
-          timeout 15s bash communicationPlane/publicTrafficHandler/tunnel_api.sh
+          timeout 15s cloudflared tunnel run --token "${TUNNEL_TOKEN}"
           status=$?
           if [[ $status -eq 124 || $status -eq 0 ]]; then
             exit 0
