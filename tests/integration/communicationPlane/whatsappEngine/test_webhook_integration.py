@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from flask import Flask
 import pytest
+from flask import Flask
 
 from communicationPlane.whatsappEngine.engine import WhatsAppEngine
 from communicationPlane.whatsappEngine.whapiInterface.webhook import create_whapi_blueprint

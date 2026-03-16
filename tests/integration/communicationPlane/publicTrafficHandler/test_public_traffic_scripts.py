@@ -11,8 +11,8 @@ import socketserver
 import subprocess
 import threading
 import time
-from pathlib import Path
 from http.client import HTTPConnection
+from pathlib import Path
 
 import pytest
 
@@ -27,7 +27,7 @@ def _write_executable(path: Path, content: str) -> None:
 
 def _start_health_server() -> tuple[socketserver.TCPServer, int, threading.Thread]:
     class Handler(http.server.BaseHTTPRequestHandler):
-        def do_GET(self) -> None:  # noqa: N802 - external interface
+        def do_GET(self) -> None:
             if self.path == "/health":
                 self.send_response(200)
                 self.send_header("Content-Type", "application/json")
@@ -37,7 +37,7 @@ def _start_health_server() -> tuple[socketserver.TCPServer, int, threading.Threa
                 self.send_response(404)
                 self.end_headers()
 
-        def log_message(self, format: str, *args: object) -> None:  # noqa: A003
+        def log_message(self, format: str, *args: object) -> None:
             return
 
     server = socketserver.TCPServer(("127.0.0.1", 0), Handler)
@@ -154,10 +154,7 @@ sleep 10
         assert "Server already running" in result.stdout
         assert "Tunnel already running" in result.stdout
         assert "Nothing to do" in result.stdout
-        if log_path.exists():
-            contents = log_path.read_text()
-        else:
-            contents = ""
+        contents = log_path.read_text() if log_path.exists() else ""
         assert "server-started" not in contents
     finally:
         cloudflared_proc.terminate()
@@ -285,8 +282,8 @@ def test_webhook_endpoint_receives_message() -> None:
         resp_body = resp.read().decode("utf-8")
         conn.close()
         assert resp.status == 200
-        assert "\"status\":\"ok\"" in resp_body
-        assert "\"messages\":1" in resp_body
+        assert '"status":"ok"' in resp_body
+        assert '"messages":1' in resp_body
     finally:
         process.terminate()
         process.wait(timeout=5)

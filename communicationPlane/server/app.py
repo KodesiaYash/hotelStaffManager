@@ -40,7 +40,8 @@ def _server_host() -> str:
 
 
 def _server_port() -> int:
-    return int(os.getenv("SERVER_PORT") or os.getenv("PORT", "5000"))
+    port_raw = os.getenv("SERVER_PORT") or os.getenv("PORT") or "5000"
+    return int(port_raw)
 
 
 def _build_local_message(text: str) -> ChatMessage:
