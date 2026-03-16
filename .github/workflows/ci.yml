@@ -126,6 +126,40 @@ jobs:
           PYTHONPATH: .
         run: pytest tests/unit
 
+  tunnel-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Check tunnel token
+        id: tunnel
+        env:
+          TUNNEL_TOKEN: ${{ secrets.TUNNEL_TOKEN }}
+        run: |
+          if [[ -n "${TUNNEL_TOKEN}" ]]; then
+            echo "has_token=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_token=false" >> "$GITHUB_OUTPUT"
+          fi
+      - name: Install cloudflared
+        if: ${{ steps.tunnel.outputs.has_token == 'true' }}
+        run: |
+          sudo curl -L https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 \
+            -o /usr/local/bin/cloudflared
+          sudo chmod +x /usr/local/bin/cloudflared
+      - name: Tunnel smoke test
+        if: ${{ steps.tunnel.outputs.has_token == 'true' }}
+        env:
+          TUNNEL_TOKEN: ${{ secrets.TUNNEL_TOKEN }}
+        run: |
+          set +e
+          timeout 15s cloudflared tunnel run --token "${TUNNEL_TOKEN}"
+          status=$?
+          if [[ $status -eq 124 || $status -eq 0 ]]; then
+            exit 0
+          fi
+          exit $status
+
   integration-tests:
     runs-on: ubuntu-latest
     steps:

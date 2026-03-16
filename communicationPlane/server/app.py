@@ -35,6 +35,15 @@ def _is_debug_enabled() -> bool:
     return os.getenv("FLASK_DEBUG") == "1"
 
 
+def _server_host() -> str:
+    return os.getenv("SERVER_HOST", "127.0.0.1")
+
+
+def _server_port() -> int:
+    port_raw = os.getenv("SERVER_PORT") or os.getenv("PORT") or "5000"
+    return int(port_raw)
+
+
 def _build_local_message(text: str) -> ChatMessage:
     return ChatMessage(
         message_id=f"local:{uuid.uuid4()}",
@@ -65,5 +74,10 @@ def process() -> tuple[Any, int]:
         return jsonify({"error": str(exc)}), 500
 
 
+@app.route("/health", methods=["GET"])
+def health() -> tuple[Any, int]:
+    return jsonify({"status": "ok"}), 200
+
+
 if __name__ == "__main__":
-    app.run(debug=_is_debug_enabled())
+    app.run(host=_server_host(), port=_server_port(), debug=_is_debug_enabled())

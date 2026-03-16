@@ -194,6 +194,9 @@ cython_debug/
 # Ruff stuff:
 .ruff_cache/
 
+# Cloudflared local config
+.cloudflared/
+
 # PyPI configuration file
 .pypirc
 
