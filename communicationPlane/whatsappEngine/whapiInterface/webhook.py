@@ -13,10 +13,17 @@ PayloadHandler = Callable[[dict[str, Any]], list[ChatMessage]]
 def create_whapi_blueprint(handler: PayloadHandler) -> Blueprint:
     blueprint = Blueprint("whapi_webhook", __name__)
 
-    @blueprint.route("/webhook", methods=["POST"])
-    def webhook() -> tuple[Any, int]:
+    def _handle_webhook() -> tuple[Any, int]:
         payload = request.get_json(silent=True) or {}
         messages = handler(payload)
         return jsonify({"status": "ok", "messages": len(messages)}), 200
+
+    @blueprint.route("/webhook", methods=["POST"])
+    def webhook() -> tuple[Any, int]:
+        return _handle_webhook()
+
+    @blueprint.route("/webhook/messages", methods=["POST"])
+    def webhook_messages() -> tuple[Any, int]:
+        return _handle_webhook()
 
     return blueprint
