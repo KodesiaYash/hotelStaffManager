@@ -1,0 +1,1118 @@
+[
+  {
+    "dutch": "bellen",
+    "english": "to call",
+    "type": "verb",
+    "example_dutch": "Ik bel de dokter voor een afspraak.",
+    "example_english": "I call the doctor for an appointment.",
+    "category": "healthcare",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "gaan",
+    "english": "to go",
+    "type": "verb",
+    "example_dutch": "Wij gaan naar school.",
+    "example_english": "We go to school.",
+    "category": "education",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "komen",
+    "english": "to come",
+    "type": "verb",
+    "example_dutch": "Kom je naar mijn huis?",
+    "example_english": "Are you coming to my house?",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "werken",
+    "english": "to work",
+    "type": "verb",
+    "example_dutch": "Ik werk in een winkel.",
+    "example_english": "I work in a store.",
+    "category": "unemployment",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "wonen",
+    "english": "to live",
+    "type": "verb",
+    "example_dutch": "Ik woon in Nederland.",
+    "example_english": "I live in the Netherlands.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "betalen",
+    "english": "to pay",
+    "type": "verb",
+    "example_dutch": "Ik betaal de huur.",
+    "example_english": "I pay the rent.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "aanvragen",
+    "english": "to apply for",
+    "type": "verb",
+    "example_dutch": "Ik moet een paspoort aanvragen bij de gemeente.",
+    "example_english": "I have to apply for a passport at the municipality.",
+    "category": "government",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "inschrijven",
+    "english": "to register",
+    "type": "verb",
+    "example_dutch": "Ik schrijf me in bij de gemeente.",
+    "example_english": "I register at the municipality.",
+    "category": "government",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "stemmen",
+    "english": "to vote",
+    "type": "verb",
+    "example_dutch": "Ik ga stemmen in de verkiezingen.",
+    "example_english": "I am going to vote in the elections.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "leren",
+    "english": "to learn",
+    "type": "verb",
+    "example_dutch": "Ik leer Nederlands.",
+    "example_english": "I am learning Dutch.",
+    "category": "education",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "studeren",
+    "english": "to study",
+    "type": "verb",
+    "example_dutch": "Zij studeert aan de universiteit.",
+    "example_english": "She studies at the university.",
+    "category": "education",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "solliciteren",
+    "english": "to apply for a job",
+    "type": "verb",
+    "example_dutch": "Ik solliciteer naar een nieuwe baan.",
+    "example_english": "I am applying for a new job.",
+    "category": "unemployment",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "verhuizen",
+    "english": "to move",
+    "type": "verb",
+    "example_dutch": "Wij verhuizen naar een groter huis.",
+    "example_english": "We are moving to a bigger house.",
+    "category": "daily_life",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "huren",
+    "english": "to rent",
+    "type": "verb",
+    "example_dutch": "Ik huur een appartement.",
+    "example_english": "I rent an apartment.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "kopen",
+    "english": "to buy",
+    "type": "verb",
+    "example_dutch": "Ik koop een fiets.",
+    "example_english": "I buy a bike.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "maken",
+    "english": "to make",
+    "type": "verb",
+    "example_dutch": "Ik maak een maaltijd.",
+    "example_english": "I make a meal.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "hebben",
+    "english": "to have",
+    "type": "verb",
+    "example_dutch": "Ik heb een huis.",
+    "example_english": "I have a house.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "zijn",
+    "english": "to be",
+    "type": "verb",
+    "example_dutch": "Zij is mijn vriendin.",
+    "example_english": "She is my friend.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "worden",
+    "english": "to become",
+    "type": "verb",
+    "example_dutch": "Ik wil dokter worden.",
+    "example_english": "I want to become a doctor.",
+    "category": "education",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "moeten",
+    "english": "must",
+    "type": "verb",
+    "example_dutch": "Ik moet naar de dokter.",
+    "example_english": "I must go to the doctor.",
+    "category": "healthcare",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "mogen",
+    "english": "may",
+    "type": "verb",
+    "example_dutch": "Mag ik hier zitten?",
+    "example_english": "May I sit here?",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "kunnen",
+    "english": "can",
+    "type": "verb",
+    "example_dutch": "Ik kan goed Nederlands spreken.",
+    "example_english": "I can speak Dutch well.",
+    "category": "education",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "willen",
+    "english": "to want",
+    "type": "verb",
+    "example_dutch": "Ik wil een kop koffie.",
+    "example_english": "I want a cup of coffee.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "zullen",
+    "english": "shall",
+    "type": "verb",
+    "example_dutch": "Zullen we naar het park gaan?",
+    "example_english": "Shall we go to the park?",
+    "category": "daily_life",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "doen",
+    "english": "to do",
+    "type": "verb",
+    "example_dutch": "Wat doe je vandaag?",
+    "example_english": "What are you doing today?",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "zien",
+    "english": "to see",
+    "type": "verb",
+    "example_dutch": "Ik zie de trein.",
+    "example_english": "I see the train.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "geven",
+    "english": "to give",
+    "type": "verb",
+    "example_dutch": "Ik geef je een boek.",
+    "example_english": "I give you a book.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "krijgen",
+    "english": "to receive",
+    "type": "verb",
+    "example_dutch": "Ik krijg een brief.",
+    "example_english": "I receive a letter.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "zoeken",
+    "english": "to search",
+    "type": "verb",
+    "example_dutch": "Ik zoek mijn sleutels.",
+    "example_english": "I am searching for my keys.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "vinden",
+    "english": "to find",
+    "type": "verb",
+    "example_dutch": "Ik vind het leuk.",
+    "example_english": "I find it nice.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "beginnen",
+    "english": "to begin",
+    "type": "verb",
+    "example_dutch": "We beginnen de les.",
+    "example_english": "We begin the lesson.",
+    "category": "education",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "stoppen",
+    "english": "to stop",
+    "type": "verb",
+    "example_dutch": "Ik stop met werken.",
+    "example_english": "I stop working.",
+    "category": "unemployment",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "helpen",
+    "english": "to help",
+    "type": "verb",
+    "example_dutch": "Kun je me helpen?",
+    "example_english": "Can you help me?",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "vragen",
+    "english": "to ask",
+    "type": "verb",
+    "example_dutch": "Ik vraag om informatie.",
+    "example_english": "I ask for information.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "antwoorden",
+    "english": "to answer",
+    "type": "verb",
+    "example_dutch": "Ik antwoord op de vraag.",
+    "example_english": "I answer the question.",
+    "category": "education",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "schrijven",
+    "english": "to write",
+    "type": "verb",
+    "example_dutch": "Ik schrijf een brief.",
+    "example_english": "I write a letter.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "lezen",
+    "english": "to read",
+    "type": "verb",
+    "example_dutch": "Ik lees een boek.",
+    "example_english": "I read a book.",
+    "category": "education",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "spreken",
+    "english": "to speak",
+    "type": "verb",
+    "example_dutch": "Ik spreek met mijn buur.",
+    "example_english": "I speak with my neighbor.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "luisteren",
+    "english": "to listen",
+    "type": "verb",
+    "example_dutch": "Ik luister naar muziek.",
+    "example_english": "I listen to music.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "eten",
+    "english": "to eat",
+    "type": "verb",
+    "example_dutch": "Wij eten samen.",
+    "example_english": "We eat together.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "drinken",
+    "english": "to drink",
+    "type": "verb",
+    "example_dutch": "Ik drink water.",
+    "example_english": "I drink water.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "slapen",
+    "english": "to sleep",
+    "type": "verb",
+    "example_dutch": "Ik slaap goed.",
+    "example_english": "I sleep well.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "rijden",
+    "english": "to drive",
+    "type": "verb",
+    "example_dutch": "Ik rijd met de auto.",
+    "example_english": "I drive with the car.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "fietsen",
+    "english": "to cycle",
+    "type": "verb",
+    "example_dutch": "Ik fiets naar mijn werk.",
+    "example_english": "I cycle to my work.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "lopen",
+    "english": "to walk",
+    "type": "verb",
+    "example_dutch": "Ik loop naar de winkel.",
+    "example_english": "I walk to the store.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "wachten",
+    "english": "to wait",
+    "type": "verb",
+    "example_dutch": "Ik wacht op de bus.",
+    "example_english": "I wait for the bus.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "begrijpen",
+    "english": "to understand",
+    "type": "verb",
+    "example_dutch": "Ik begrijp de les.",
+    "example_english": "I understand the lesson.",
+    "category": "education",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "kennen",
+    "english": "to know (a person)",
+    "type": "verb",
+    "example_dutch": "Ik ken jouw naam.",
+    "example_english": "I know your name.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "weten",
+    "english": "to know (a fact)",
+    "type": "verb",
+    "example_dutch": "Ik weet het antwoord.",
+    "example_english": "I know the answer.",
+    "category": "education",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "voelen",
+    "english": "to feel",
+    "type": "verb",
+    "example_dutch": "Ik voel me goed.",
+    "example_english": "I feel good.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "denken",
+    "english": "to think",
+    "type": "verb",
+    "example_dutch": "Ik denk aan mijn familie.",
+    "example_english": "I think of my family.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "vergeten",
+    "english": "to forget",
+    "type": "verb",
+    "example_dutch": "Ik vergeet mijn sleutels.",
+    "example_english": "I forget my keys.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "onthouden",
+    "english": "to remember",
+    "type": "verb",
+    "example_dutch": "Ik onthoud de informatie.",
+    "example_english": "I remember the information.",
+    "category": "education",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "opbellen",
+    "english": "to call (back)",
+    "type": "verb",
+    "example_dutch": "Ik bel je later op.",
+    "example_english": "I will call you back later.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "afspreken",
+    "english": "to meet",
+    "type": "verb",
+    "example_dutch": "Laten we afspreken om 3 uur.",
+    "example_english": "Let's meet at 3 o'clock.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "invullen",
+    "english": "to fill in",
+    "type": "verb",
+    "example_dutch": "Ik vul het formulier in.",
+    "example_english": "I fill in the form.",
+    "category": "government",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "ondertekenen",
+    "english": "to sign",
+    "type": "verb",
+    "example_dutch": "Ik onderteken het contract.",
+    "example_english": "I sign the contract.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "verzekeren",
+    "english": "to insure",
+    "type": "verb",
+    "example_dutch": "Ik moet mijn auto verzekeren.",
+    "example_english": "I need to insure my car.",
+    "category": "daily_life",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "regelen",
+    "english": "to arrange",
+    "type": "verb",
+    "example_dutch": "Ik regel een afspraak.",
+    "example_english": "I arrange an appointment.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "melden",
+    "english": "to report",
+    "type": "verb",
+    "example_dutch": "Ik meld me bij de balie.",
+    "example_english": "I report to the counter.",
+    "category": "government",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "klagen",
+    "english": "to complain",
+    "type": "verb",
+    "example_dutch": "Ik klaag over de service.",
+    "example_english": "I complain about the service.",
+    "category": "daily_life",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "huisarts",
+    "english": "general practitioner",
+    "type": "noun",
+    "example_dutch": "De huisarts helpt me als ik ziek ben.",
+    "example_english": "The general practitioner helps me when I am sick.",
+    "category": "healthcare",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "gemeente",
+    "english": "municipality",
+    "type": "noun",
+    "example_dutch": "Ik ga naar de gemeente voor mijn paspoort.",
+    "example_english": "I go to the municipality for my passport.",
+    "category": "government",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "school",
+    "english": "school",
+    "type": "noun",
+    "example_dutch": "De school is dichtbij.",
+    "example_english": "The school is nearby.",
+    "category": "education",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "werk",
+    "english": "work",
+    "type": "noun",
+    "example_dutch": "Ik heb werk gevonden.",
+    "example_english": "I have found work.",
+    "category": "unemployment",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "belasting",
+    "english": "tax",
+    "type": "noun",
+    "example_dutch": "Ik moet belasting betalen.",
+    "example_english": "I have to pay tax.",
+    "category": "tax",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "uitkering",
+    "english": "benefit",
+    "type": "noun",
+    "example_dutch": "Ik ontvang een uitkering.",
+    "example_english": "I receive a benefit.",
+    "category": "unemployment",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "zorgverzekering",
+    "english": "health insurance",
+    "type": "noun",
+    "example_dutch": "Ik heb zorgverzekering nodig.",
+    "example_english": "I need health insurance.",
+    "category": "healthcare",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "paspoort",
+    "english": "passport",
+    "type": "noun",
+    "example_dutch": "Mijn paspoort is verlopen.",
+    "example_english": "My passport has expired.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "rijbewijs",
+    "english": "driver's license",
+    "type": "noun",
+    "example_dutch": "Ik heb mijn rijbewijs nodig.",
+    "example_english": "I need my driver's license.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "DigiD",
+    "english": "DigiD (digital identity)",
+    "type": "noun",
+    "example_dutch": "Ik gebruik mijn DigiD voor online diensten.",
+    "example_english": "I use my DigiD for online services.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "huur",
+    "english": "rent",
+    "type": "noun",
+    "example_dutch": "De huur is hoog.",
+    "example_english": "The rent is high.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "contract",
+    "english": "contract",
+    "type": "noun",
+    "example_dutch": "Ik heb een contract getekend.",
+    "example_english": "I signed a contract.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "loon",
+    "english": "salary",
+    "type": "noun",
+    "example_dutch": "Mijn loon is op tijd.",
+    "example_english": "My salary is on time.",
+    "category": "unemployment",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "boete",
+    "english": "fine",
+    "type": "noun",
+    "example_dutch": "Ik heb een boete gekregen.",
+    "example_english": "I received a fine.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "afspraak",
+    "english": "appointment",
+    "type": "noun",
+    "example_dutch": "Ik heb een afspraak met de dokter.",
+    "example_english": "I have an appointment with the doctor.",
+    "category": "healthcare",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "formulier",
+    "english": "form",
+    "type": "noun",
+    "example_dutch": "Ik vul het formulier in.",
+    "example_english": "I fill in the form.",
+    "category": "government",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "vergunning",
+    "english": "permit",
+    "type": "noun",
+    "example_dutch": "Ik heb een vergunning nodig.",
+    "example_english": "I need a permit.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "wijk",
+    "english": "neighborhood",
+    "type": "noun",
+    "example_dutch": "Ik woon in deze wijk.",
+    "example_english": "I live in this neighborhood.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "buur",
+    "english": "neighbor",
+    "type": "noun",
+    "example_dutch": "Mijn buur is vriendelijk.",
+    "example_english": "My neighbor is friendly.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "politie",
+    "english": "police",
+    "type": "noun",
+    "example_dutch": "De politie helpt ons.",
+    "example_english": "The police help us.",
+    "category": "society",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "brandweer",
+    "english": "fire department",
+    "type": "noun",
+    "example_dutch": "De brandweer komt snel.",
+    "example_english": "The fire department comes quickly.",
+    "category": "society",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "ambulance",
+    "english": "ambulance",
+    "type": "noun",
+    "example_dutch": "De ambulance is onderweg.",
+    "example_english": "The ambulance is on its way.",
+    "category": "healthcare",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "dag",
+    "english": "day",
+    "type": "noun",
+    "example_dutch": "Vandaag is het een mooie dag.",
+    "example_english": "Today is a beautiful day.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "week",
+    "english": "week",
+    "type": "noun",
+    "example_dutch": "Deze week is druk.",
+    "example_english": "This week is busy.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "maand",
+    "english": "month",
+    "type": "noun",
+    "example_dutch": "Deze maand is het koud.",
+    "example_english": "This month is cold.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "geld",
+    "english": "money",
+    "type": "noun",
+    "example_dutch": "Ik heb niet genoeg geld.",
+    "example_english": "I do not have enough money.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "huis",
+    "english": "house",
+    "type": "noun",
+    "example_dutch": "Mijn huis is groot.",
+    "example_english": "My house is big.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "straat",
+    "english": "street",
+    "type": "noun",
+    "example_dutch": "De straat is druk.",
+    "example_english": "The street is busy.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "winkel",
+    "english": "store",
+    "type": "noun",
+    "example_dutch": "De winkel is open.",
+    "example_english": "The store is open.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "trein",
+    "english": "train",
+    "type": "noun",
+    "example_dutch": "De trein is op tijd.",
+    "example_english": "The train is on time.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "bus",
+    "english": "bus",
+    "type": "noun",
+    "example_dutch": "De bus komt om 10 uur.",
+    "example_english": "The bus comes at 10 o'clock.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "fiets",
+    "english": "bicycle",
+    "type": "noun",
+    "example_dutch": "Ik heb een nieuwe fiets.",
+    "example_english": "I have a new bicycle.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "auto",
+    "english": "car",
+    "type": "noun",
+    "example_dutch": "Mijn auto is blauw.",
+    "example_english": "My car is blue.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "brood",
+    "english": "bread",
+    "type": "noun",
+    "example_dutch": "Ik koop brood in de winkel.",
+    "example_english": "I buy bread in the store.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "water",
+    "english": "water",
+    "type": "noun",
+    "example_dutch": "Ik drink water.",
+    "example_english": "I drink water.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "dokter",
+    "english": "doctor",
+    "type": "noun",
+    "example_dutch": "De dokter helpt me.",
+    "example_english": "The doctor helps me.",
+    "category": "healthcare",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "ziek",
+    "english": "sick",
+    "type": "adjective",
+    "example_dutch": "Ik voel me ziek.",
+    "example_english": "I feel sick.",
+    "category": "healthcare",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "gezond",
+    "english": "healthy",
+    "type": "adjective",
+    "example_dutch": "Ik eet gezond.",
+    "example_english": "I eat healthy.",
+    "category": "healthcare",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "duur",
+    "english": "expensive",
+    "type": "adjective",
+    "example_dutch": "Dit is te duur.",
+    "example_english": "This is too expensive.",
+    "category": "daily_life",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "goedkoop",
+    "english": "cheap",
+    "type": "adjective",
+    "example_dutch": "Dit is goedkoop.",
+    "example_english": "This is cheap.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "open",
+    "english": "open",
+    "type": "adjective",
+    "example_dutch": "De winkel is open.",
+    "example_english": "The store is open.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "dicht",
+    "english": "closed",
+    "type": "adjective",
+    "example_dutch": "De deur is dicht.",
+    "example_english": "The door is closed.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "links",
+    "english": "left",
+    "type": "adjective",
+    "example_dutch": "Ga links bij het stoplicht.",
+    "example_english": "Go left at the traffic light.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "rechts",
+    "english": "right",
+    "type": "adjective",
+    "example_dutch": "Neem rechts bij de hoek.",
+    "example_english": "Take right at the corner.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "hier",
+    "english": "here",
+    "type": "adverb",
+    "example_dutch": "Ik ben hier.",
+    "example_english": "I am here.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "daar",
+    "english": "there",
+    "type": "adverb",
+    "example_dutch": "De winkel is daar.",
+    "example_english": "The store is there.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "vandaag",
+    "english": "today",
+    "type": "adverb",
+    "example_dutch": "Vandaag is het mooi weer.",
+    "example_english": "Today the weather is nice.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "morgen",
+    "english": "tomorrow",
+    "type": "adverb",
+    "example_dutch": "Morgen ga ik naar school.",
+    "example_english": "Tomorrow I will go to school.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "gisteren",
+    "english": "yesterday",
+    "type": "adverb",
+    "example_dutch": "Gisteren was ik ziek.",
+    "example_english": "Yesterday I was sick.",
+    "category": "daily_life",
+    "difficulty": "easy"
+  },
+  {
+    "dutch": "provincie",
+    "english": "province",
+    "type": "noun",
+    "example_dutch": "Ik woon in de provincie Utrecht.",
+    "example_english": "I live in the province of Utrecht.",
+    "category": "country_knowledge",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "Tweede Kamer",
+    "english": "House of Representatives",
+    "type": "noun",
+    "example_dutch": "De Tweede Kamer heeft een vergadering.",
+    "example_english": "The House of Representatives has a meeting.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "Grondwet",
+    "english": "Constitution",
+    "type": "noun",
+    "example_dutch": "De Grondwet is belangrijk.",
+    "example_english": "The Constitution is important.",
+    "category": "country_knowledge",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "koning",
+    "english": "king",
+    "type": "noun",
+    "example_dutch": "De koning is de leider.",
+    "example_english": "The king is the leader.",
+    "category": "country_knowledge",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "minister-president",
+    "english": "prime minister",
+    "type": "noun",
+    "example_dutch": "De minister-president geeft een toespraak.",
+    "example_english": "The prime minister gives a speech.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "verkiezingen",
+    "english": "elections",
+    "type": "noun",
+    "example_dutch": "De verkiezingen zijn belangrijk.",
+    "example_english": "The elections are important.",
+    "category": "government",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "vrijheid",
+    "english": "freedom",
+    "type": "noun",
+    "example_dutch": "Vrijheid is belangrijk voor iedereen.",
+    "example_english": "Freedom is important for everyone.",
+    "category": "society",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "gelijkheid",
+    "english": "equality",
+    "type": "noun",
+    "example_dutch": "Gelijkheid is een recht.",
+    "example_english": "Equality is a right.",
+    "category": "society",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "discriminatie",
+    "english": "discrimination",
+    "type": "noun",
+    "example_dutch": "Discriminatie is niet goed.",
+    "example_english": "Discrimination is not good.",
+    "category": "society",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "leerplicht",
+    "english": "compulsory education",
+    "type": "noun",
+    "example_dutch": "Leerplicht is belangrijk voor kinderen.",
+    "example_english": "Compulsory education is important for children.",
+    "category": "children",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "kinderbijslag",
+    "english": "child benefit",
+    "type": "noun",
+    "example_dutch": "Ik ontvang kinderbijslag voor mijn kinderen.",
+    "example_english": "I receive child benefit for my children.",
+    "category": "children",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "toeslagen",
+    "english": "allowances",
+    "type": "noun",
+    "example_dutch": "Ik vraag toeslagen aan.",
+    "example_english": "I apply for allowances.",
+    "category": "tax",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "Belastingdienst",
+    "english": "Tax Office",
+    "type": "noun",
+    "example_dutch": "Ik ga naar de Belastingdienst.",
+    "example_english": "I go to the Tax Office.",
+    "category": "tax",
+    "difficulty": "medium"
+  },
+  {
+    "dutch": "UWV",
+    "english": "Employee Insurance Agency",
+    "type": "noun",
+    "example_dutch": "Ik vraag hulp bij het UWV.",
+    "example_english": "I ask for help at the Employee Insurance Agency.",
+    "category": "unemployment",
+    "difficulty": "medium"
+  }
+]

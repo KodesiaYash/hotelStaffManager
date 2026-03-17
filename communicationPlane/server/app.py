@@ -20,10 +20,13 @@ from communicationPlane.whatsappEngine.whapiInterface.webhook import (  # noqa: 
 from controlplane.control.control_plane_interface import (  # noqa: E402
     ControlPlaneInterface,
 )
+from controlplane.control.bot.dutchTutor.dutch_tutor import DutchTutor  # noqa: E402
 from models.chat_message import ChatMessage  # noqa: E402
 
 app = Flask(__name__)
-control_plane = ControlPlaneInterface()
+dutch_tutor = DutchTutor()
+control_plane = ControlPlaneInterface(dutch_tutor_handler=dutch_tutor.handle_incoming_message)
+dutch_tutor.start()
 whatsapp_engine = WhatsAppEngine(control_plane)
 app.register_blueprint(
     create_whapi_blueprint(whatsapp_engine.process_payload),
