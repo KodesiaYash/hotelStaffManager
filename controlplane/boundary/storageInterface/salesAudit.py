@@ -217,7 +217,7 @@ def _find_pricelist_match(records: list[dict[str, Any]], service_value: str) -> 
         if not row_service:
             continue
         row_service_value = str(row_service).strip().lower()
-        if row_service_value in service_value or service_value in row_service_value:
+        if row_service_value in service_value.lower() or service_value.lower() in row_service_value:
             return row
     return None
 
