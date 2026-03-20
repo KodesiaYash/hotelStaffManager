@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import logging
 import os
 from typing import Any
 
 import requests
 
 from models.whapi import WhapiConfig
+
+logger = logging.getLogger(__name__)
 
 
 class WhapiError(RuntimeError):
@@ -70,6 +73,13 @@ class WhapiClient:
                 payload: Any = response.json()
             except ValueError:
                 payload = response.text
+            logger.error(
+                "WHAPI request failed method=%s path=%s status=%s payload=%s",
+                method,
+                path,
+                response.status_code,
+                payload,
+            )
             raise WhapiError(
                 f"WHAPI request failed ({response.status_code})",
                 status_code=response.status_code,
@@ -93,6 +103,7 @@ class WhapiClient:
         no_link_preview: bool | None = None,
         wide_link_preview: bool | None = None,
     ) -> dict[str, Any]:
+        logger.info("WHAPI send_text to=%s body_len=%d", to, len(body))
         payload: dict[str, Any] = {"to": to, "body": body}
         if mentions:
             payload["mentions"] = mentions

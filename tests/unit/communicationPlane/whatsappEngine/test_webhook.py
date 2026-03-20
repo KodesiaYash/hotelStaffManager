@@ -48,8 +48,14 @@ def test_webhook_blueprint_returns_count() -> None:
     with app.test_client() as client:
         response = client.post("/whapi/webhook", json={"messages": []})
         assert response.status_code == 200
-        assert response.get_json() == {"status": "ok", "messages": 2}
+        payload = response.get_json()
+        assert payload["status"] == "ok"
+        assert payload["messages"] == 2
+        assert "request_id" in payload
 
         response = client.post("/whapi/webhook/messages", json={"messages": []})
         assert response.status_code == 200
-        assert response.get_json() == {"status": "ok", "messages": 2}
+        payload = response.get_json()
+        assert payload["status"] == "ok"
+        assert payload["messages"] == 2
+        assert "request_id" in payload

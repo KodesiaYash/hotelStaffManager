@@ -12,6 +12,7 @@ from dotenv import load_dotenv
 from controlplane.boundary.storageInterface.priceList import PriceList
 from controlplane.boundary.storageInterface.salesAudit import SalesAudit
 from controlplane.boundary.storageInterface.sheetsConnector import normalize_env_value
+from controlplane.boundary.storageInterface.staffToHotelMapping import StaffToHotelMapping
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
 
@@ -119,15 +120,25 @@ def test_process_message_pipeline() -> None:
     }
 
     original_llm_extract = brain_module.llm_extract
+    original_get_staff_mapping = brain_module._get_staff_mapping
 
     def _fake_extract(_message: str) -> dict[str, Any]:
         return fake_payload
 
+    class DummyMapping(StaffToHotelMapping):
+        def __init__(self) -> None:
+            pass
+
+        def find_by_phone(self, _phone: str) -> list[dict[str, Any]]:
+            return [{"phone": "12345", "name": "Test Staff", "hotel": "RIAD Roxanne"}]
+
     brain_module.llm_extract = _fake_extract  # type: ignore[assignment]
+    brain_module._get_staff_mapping = lambda: DummyMapping()
     try:
-        brain_module.process_message("healthcheck")
+        brain_module.process_message("healthcheck", sender_id="12345")
     finally:
         brain_module.llm_extract = original_llm_extract
+        brain_module._get_staff_mapping = original_get_staff_mapping
 
     audit = SalesAudit()
     worksheet = audit.connector.get_worksheet(audit.details_key)
