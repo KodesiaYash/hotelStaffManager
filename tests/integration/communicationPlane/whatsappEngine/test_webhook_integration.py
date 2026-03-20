@@ -51,7 +51,10 @@ def test_webhook_messages_endpoint_ingests_payload() -> None:
     with app.test_client() as client:
         response = client.post("/whapi/webhook/messages", json=_payload())
         assert response.status_code == 200
-        assert response.get_json() == {"status": "ok", "messages": 1}
+        payload = response.get_json()
+        assert payload["status"] == "ok"
+        assert payload["messages"] == 1
+        assert "request_id" in payload
 
     assert len(control.messages) == 1
     assert control.messages[0].text == "hello"

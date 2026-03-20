@@ -34,6 +34,11 @@ DEFAULT_PROMPT = (
     "along with a number; use your best intelligence to judge if it is the quantity "
     'of the service sold. If yes, populate the "Quantity" field, otherwise default to 1. '
     "Do NOT use guest count (e.g., 2px) as quantity unless explicitly stated as quantity. "
+    "If the message contains a line like 'Quantity: 3', 'Qty: 3', 'Qnty: 3', or '3 quantity', treat "
+    "that as the quantity for the service(s). If a standalone number appears directly next to the "
+    "service name or on the same line, treat it as quantity (e.g., '3 Transfer', 'Transfer 3'). "
+    "If multiple services are listed and only one quantity is given, apply it to all services unless "
+    "a specific per-service quantity is stated. "
     "If multiple services are mentioned, return multiple entries (one per service). "
     "Respond ONLY with valid JSON in the following format (no extra text, no explanations, "
     "no unnecessary special characters): "
@@ -63,6 +68,21 @@ def _normalize_hotel_name(value: str | None) -> str | None:
     if "persephone" in lowered:
         return "RIAD Persephone"
     return value.strip()
+
+
+def _coerce_quantity(value: Any) -> float:
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip()
+    if not text:
+        return 1.0
+    match = re.search(r"[-+]?[0-9]*\.?[0-9]+", text.replace(",", ""))
+    if not match:
+        return 1.0
+    try:
+        return float(match.group(0))
+    except ValueError:
+        return 1.0
 
 
 def _load_env_files() -> None:
@@ -196,9 +216,7 @@ def _resolve_staff_and_hotel(
 
     names = {
         str(val).strip()
-        for val in (
-            _get_case_insensitive(row, ["name", "staff", "staff_name", "employee"]) for row in matches
-        )
+        for val in (_get_case_insensitive(row, ["name", "staff", "staff_name", "employee"]) for row in matches)
         if val
     }
     if not names:
@@ -210,9 +228,7 @@ def _resolve_staff_and_hotel(
 
     hotels = {
         _normalize_hotel_name(str(val)) or str(val).strip()
-        for val in (
-            _get_case_insensitive(row, ["hotel", "hotel_name", "property"]) for row in matches
-        )
+        for val in (_get_case_insensitive(row, ["hotel", "hotel_name", "property"]) for row in matches)
         if val
     }
     if extracted_hotel:
@@ -298,13 +314,15 @@ def process_message(message: str, sender_id: str | None = None) -> None:
             quantity = 1
         if quantity is None:
             quantity = 1
-        cost = _get_sales_audit().calculate_cost(service, quantity, llm=_get_llm_interface())
+        quantity_value = _coerce_quantity(quantity)
+        quantity_row: Any = int(quantity_value) if quantity_value.is_integer() else quantity_value
+        cost = _get_sales_audit().calculate_cost(service, quantity_value, llm=_get_llm_interface())
 
         try:
             cost = _get_sales_audit().write_details_sheet(
                 [
                     service,
-                    quantity,
+                    quantity_row,
                     _get_case_insensitive(entry, ["Date"]) or "",
                     _get_case_insensitive(entry, ["Time"]) or "",
                     _get_case_insensitive(entry, ["Guest"]) or "",

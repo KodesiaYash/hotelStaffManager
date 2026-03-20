@@ -6,7 +6,7 @@ import logging
 import os
 import sys
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 _CONTEXT_VARS: dict[str, contextvars.ContextVar[str | None]] = {
@@ -85,7 +85,7 @@ class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
         message = record.getMessage()
         payload: dict[str, Any] = {
-            "timestamp": datetime.fromtimestamp(record.created, tz=timezone.utc).isoformat(),
+            "timestamp": datetime.fromtimestamp(record.created, tz=UTC).isoformat(),
             "level": record.levelname,
             "logger": record.name,
             "message": message,
@@ -100,7 +100,7 @@ def init_logging(level: str | None = None) -> None:
     global _LOGGING_CONFIGURED
     if _LOGGING_CONFIGURED:
         return
-    log_level = (level or os.getenv("LOG_LEVEL", "INFO")).upper()
+    log_level = (level or os.getenv("LOG_LEVEL") or "INFO").upper()
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
@@ -124,7 +124,7 @@ def log_low_confidence(payload: dict[str, Any]) -> None:
         path = os.path.join(_ABS_PROJECT_ROOT, path)
     _ensure_parent_dir(path)
     entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         **_current_context(),
         **payload,
     }
@@ -138,7 +138,7 @@ def log_medium_confidence(payload: dict[str, Any]) -> None:
         path = os.path.join(_ABS_PROJECT_ROOT, path)
     _ensure_parent_dir(path)
     entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         **_current_context(),
         **payload,
     }

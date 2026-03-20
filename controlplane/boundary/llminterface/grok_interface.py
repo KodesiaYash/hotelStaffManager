@@ -25,15 +25,10 @@ class GrokInterface:
         self.model = model or os.getenv("GROK_MODEL") or DEFAULT_MODEL
         self.config = config or DEFAULT_CONFIG
         self.base_url = base_url or os.getenv("GROK_BASE_URL") or "https://api.x.ai/v1"
-        self._client: "OpenAI | None" = None
+        self._client: OpenAI | None = None
 
-    def _get_client(self) -> "OpenAI":
-        api_key = (
-            self._api_key
-            or os.getenv("GROK_API_KEY")
-            or os.getenv("XAI_API_KEY")
-            or os.getenv("XAI_TOKEN")
-        )
+    def _get_client(self) -> OpenAI:
+        api_key = self._api_key or os.getenv("GROK_API_KEY") or os.getenv("XAI_API_KEY") or os.getenv("XAI_TOKEN")
         if not api_key:
             raise ValueError("GROK_API_KEY is not set")
         if self._client is None:

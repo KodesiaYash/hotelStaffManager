@@ -23,9 +23,9 @@ class ClaudeInterface:
         self._api_key = api_key
         self.model = model or os.getenv("CLAUDE_MODEL") or DEFAULT_MODEL
         self.config = config or DEFAULT_CONFIG
-        self._client: "Anthropic | None" = None
+        self._client: Anthropic | None = None
 
-    def _get_client(self) -> "Anthropic":
+    def _get_client(self) -> Anthropic:
         api_key = self._api_key or os.getenv("ANTHROPIC_API_KEY") or os.getenv("CLAUDE_API_KEY")
         if not api_key:
             raise ValueError("ANTHROPIC_API_KEY is not set")
@@ -49,5 +49,9 @@ class ClaudeInterface:
             max_tokens=self.config.get("max_tokens", 1024),
         )
         content = response.content or []
-        parts = [part.text for part in content if getattr(part, "text", None)]
+        parts: list[str] = []
+        for part in content:
+            text = getattr(part, "text", None)
+            if isinstance(text, str) and text:
+                parts.append(text)
         return "".join(parts)

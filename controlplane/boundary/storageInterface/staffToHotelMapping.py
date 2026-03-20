@@ -29,9 +29,7 @@ _load_env_files()
 
 def build_staff_mapping_config(env: Mapping[str, str] | None = None) -> dict[str, Any]:
     env = env or os.environ
-    sheet_id = normalize_env_value(
-        env.get("STAFF_MAPPING_SHEET_ID") or env.get("STAFF_TO_HOTEL_SHEET_ID")
-    )
+    sheet_id = normalize_env_value(env.get("STAFF_MAPPING_SHEET_ID") or env.get("STAFF_TO_HOTEL_SHEET_ID"))
     return {
         "service_account_file": normalize_env_value(env.get("GOOGLE_SHEETS_KEY")),
         "scopes": DEFAULT_SCOPES,
@@ -54,11 +52,7 @@ def _normalize_phone(value: str | None) -> str:
 def _phones_match(candidate: str, target: str) -> bool:
     if not candidate or not target:
         return False
-    if candidate == target:
-        return True
-    if candidate.endswith(target) or target.endswith(candidate):
-        return True
-    return False
+    return candidate == target or candidate.endswith(target) or target.endswith(candidate)
 
 
 def _get_case_insensitive(row: dict[str, Any], keys: list[str]) -> Any | None:
