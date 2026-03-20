@@ -43,8 +43,8 @@ DEFAULT_PROMPT = (
     "Respond ONLY with valid JSON in the following format (no extra text, no explanations, "
     "no unnecessary special characters): "
     "["
-    '{"Service": "task or \'\'", "Quantity": "number or \'1\'", "Date": "number or \'\'", '
-    '"Time": "number or \'\'", "Guest": "name or \'\'", "Room": "name or \'\'", '
+    '{"Service": "task or \'\'", "Quantity": "number or \'1\'", "Date": "number in DD/MM/YYYY format or \'\'", '
+    '"Time": "number in 24 hour format (If am or pm is given, infer the equivalent time in 24 hour format) or \'\'", "Guest": "number (only mention the number) or \'\'", "Room": "name or \'\'", '
     '"Asignee": "name or \'\'", "HotelName": "RIAD Roxanne or RIAD Persephone or \'\'", '
     '"Amount": number or 0, '
     '"confidence": "high/medium/low"}'
