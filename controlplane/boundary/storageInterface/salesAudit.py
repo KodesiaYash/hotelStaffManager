@@ -4,6 +4,7 @@ import csv
 import os
 import re
 from collections.abc import Mapping, Sequence
+from difflib import SequenceMatcher
 from typing import Any, Protocol
 
 from dotenv import load_dotenv
@@ -55,6 +56,10 @@ class PriceListClient(Protocol):
     def read_pricelist(self) -> list[dict[str, Any]]: ...
 
     def write_pricelist(self, data: Sequence[Any]) -> None: ...
+
+
+class LLMClient(Protocol):
+    def generate(self, prompt: str) -> str: ...
 
 
 class SalesAudit:
@@ -109,7 +114,7 @@ class SalesAudit:
             raise RuntimeError("PriceList not configured")
         self.pricelist.write_pricelist(list(data))
 
-    def calculate_cost(self, service: str, quantity: float = 1) -> float:
+    def calculate_cost(self, service: str, quantity: float = 1, llm: LLMClient | None = None) -> float:
         if not self.pricelist:
             return 0.0
 
@@ -121,33 +126,37 @@ class SalesAudit:
         if not records:
             return 0.0
 
-        for row in records:
-            row_service = _get_case_insensitive(row, ["service", "item", "name"])
-            if not row_service:
-                continue
-            row_service_value = str(row_service).strip().lower()
-            if row_service_value in service_value or service_value in row_service_value:
-                unit_cost = _parse_number(
-                    _get_case_insensitive(
-                        row,
-                        [
-                            "cost",
-                            "price",
-                            "rate",
-                            "unit_cost",
-                            "unit price",
-                            "unitprice",
-                        ],
-                    )
-                )
-                if unit_cost is None:
-                    continue
-                qty = _parse_number(quantity)
-                if qty is None:
-                    qty = 1
-                return float(unit_cost) * float(qty)
+        direct_match = _find_pricelist_match(records, service_value)
+        if direct_match is None and llm:
+            matched_name = _llm_match_service(service_value, records, llm)
+            if matched_name:
+                direct_match = _find_pricelist_match(records, matched_name)
 
-        return 0.0
+        if direct_match is None:
+            return 0.0
+
+        unit_cost = _parse_number(
+            _get_case_insensitive(
+                direct_match,
+                [
+                    "cost",
+                    "price",
+                    "selling price",
+                    "selling price (mad)",
+                    "selling price mad",
+                    "rate",
+                    "unit_cost",
+                    "unit price",
+                    "unitprice",
+                ],
+            )
+        )
+        if unit_cost is None:
+            return 0.0
+        qty = _parse_number(quantity)
+        if qty is None:
+            qty = 1
+        return float(unit_cost) * float(qty)
 
     def export_details_to_csv(self, filename: str = "details_export.csv") -> None:
         records = self.read_details_sheet()
@@ -200,6 +209,62 @@ def _parse_number(value: Any) -> float | None:
         return float(match.group(0))
     except ValueError:
         return None
+
+
+def _find_pricelist_match(records: list[dict[str, Any]], service_value: str) -> dict[str, Any] | None:
+    for row in records:
+        row_service = _get_case_insensitive(row, ["service", "item", "name"])
+        if not row_service:
+            continue
+        row_service_value = str(row_service).strip().lower()
+        if row_service_value in service_value or service_value in row_service_value:
+            return row
+    return None
+
+
+def _llm_match_service(service_value: str, records: list[dict[str, Any]], llm: LLMClient) -> str | None:
+    if os.getenv("SALES_BOT_LLM_MATCHING") != "1":
+        return None
+    candidates = [
+        str(_get_case_insensitive(row, ["service", "item", "name"]))
+        for row in records
+        if _get_case_insensitive(row, ["service", "item", "name"])
+    ]
+    if not candidates:
+        return None
+    scored = sorted(
+        candidates,
+        key=lambda name: SequenceMatcher(None, service_value, str(name).lower()).ratio(),
+        reverse=True,
+    )
+    top_candidates = scored[:20]
+    prompt = (
+        "You are matching a service name to a price list. "
+        "Return ONLY JSON: {\"match\": \"<exact candidate or empty>\", \"confidence\": \"high|medium|low\"}.\n\n"
+        f"Service to match: \"{service_value}\"\n"
+        f"Candidates: {top_candidates}\n"
+    )
+    try:
+        response = llm.generate(prompt)
+    except Exception:
+        return None
+    try:
+        import json
+
+        data = json.loads(response.strip())
+    except Exception:
+        return None
+    match = str(data.get("match") or "").strip()
+    confidence = str(data.get("confidence") or "").strip().lower()
+    if not match:
+        return None
+    candidate_lookup = {str(name).strip().lower(): str(name) for name in top_candidates}
+    canonical = candidate_lookup.get(match.lower())
+    if not canonical:
+        return None
+    if confidence == "low":
+        return None
+    return canonical
 
 
 _default_audit: SalesAudit | None = None

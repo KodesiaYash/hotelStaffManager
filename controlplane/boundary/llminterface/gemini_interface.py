@@ -16,11 +16,11 @@ class GeminiInterface:
     def __init__(
         self,
         api_key: str | None = None,
-        model: str = DEFAULT_MODEL,
+        model: str | None = None,
         config: dict[str, Any] | None = None,
     ) -> None:
         self._api_key = api_key
-        self.model = model
+        self.model = model or os.getenv("GEMINI_MODEL") or DEFAULT_MODEL
         self.config = config or DEFAULT_CONFIG
         self._client: genai.Client | None = None
 

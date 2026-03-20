@@ -119,15 +119,22 @@ def test_process_message_pipeline() -> None:
     }
 
     original_llm_extract = brain_module.llm_extract
+    original_get_staff_mapping = brain_module._get_staff_mapping
 
     def _fake_extract(_message: str) -> dict[str, Any]:
         return fake_payload
 
+    class DummyMapping:
+        def find_by_phone(self, _phone: str) -> list[dict[str, Any]]:
+            return [{"phone": "12345", "name": "Test Staff", "hotel": "RIAD Roxanne"}]
+
     brain_module.llm_extract = _fake_extract  # type: ignore[assignment]
+    brain_module._get_staff_mapping = lambda: DummyMapping()  # type: ignore[assignment]
     try:
-        brain_module.process_message("healthcheck")
+        brain_module.process_message("healthcheck", sender_id="12345")
     finally:
         brain_module.llm_extract = original_llm_extract
+        brain_module._get_staff_mapping = original_get_staff_mapping
 
     audit = SalesAudit()
     worksheet = audit.connector.get_worksheet(audit.details_key)
