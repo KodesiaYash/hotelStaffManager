@@ -11,6 +11,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 
 if TYPE_CHECKING:
     from openai import OpenAI
+    from openai.types.chat import ChatCompletionMessageParam
 
 
 class OpenAIInterface:
@@ -44,13 +45,13 @@ class OpenAIInterface:
 
     def generate(self, prompt: str, system_prompt: str | None = None) -> str:
         client = self._get_client()
-        messages: list[dict[str, str]] = []
+        messages: list[ChatCompletionMessageParam] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
         messages.append({"role": "user", "content": prompt})
         response = client.chat.completions.create(
             model=self.model,
-            messages=messages,  # type: ignore[arg-type]
+            messages=messages,
             **self.config,
         )
         return response.choices[0].message.content or ""
