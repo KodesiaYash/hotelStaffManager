@@ -64,6 +64,21 @@ def _get_case_insensitive(row: dict[str, Any], keys: list[str]) -> Any | None:
     return None
 
 
+def _parse_percentage(value: Any) -> float:
+    """Parse a percentage value, returning 0.0 if invalid."""
+    if value is None:
+        return 0.0
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().replace("%", "")
+    if not text:
+        return 0.0
+    try:
+        return float(text)
+    except ValueError:
+        return 0.0
+
+
 class StaffToHotelMapping:
     def __init__(
         self,
@@ -76,6 +91,35 @@ class StaffToHotelMapping:
 
     def read_mapping(self) -> list[dict[str, Any]]:
         return self.connector.read_all_records(self.sheet_key)
+
+    def get_all_staff_with_commission(self) -> list[dict[str, Any]]:
+        """Get all staff members with their commission percentage.
+
+        Returns list of dicts with keys: name, phone, commission_percentage
+        """
+        results: list[dict[str, Any]] = []
+        for row in self.read_mapping():
+            name = _get_case_insensitive(row, ["name", "staff", "staff_name", "employee"])
+            phone = _get_case_insensitive(row, ["phone", "phone_number", "mobile", "number", "whatsapp", "contact"])
+            commission_pct = _get_case_insensitive(
+                row,
+                [
+                    "commission_percentage",
+                    "Commission Percentage",
+                    "commission",
+                    "commission_pct",
+                    "comm_%",
+                ],
+            )
+            if name:
+                results.append(
+                    {
+                        "name": str(name).strip(),
+                        "phone": _normalize_phone(str(phone) if phone else ""),
+                        "commission_percentage": _parse_percentage(commission_pct),
+                    }
+                )
+        return results
 
     def find_by_phone(self, phone: str) -> list[dict[str, Any]]:
         normalized = _normalize_phone(phone)

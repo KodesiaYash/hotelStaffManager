@@ -13,6 +13,9 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
+from communicationPlane.whatsappEngine.whapiInterface.whapi_client import (  # noqa: E402
+    WhapiClient,
+)
 from controlplane.boundary.llminterface.llm_interface import (  # noqa: E402
     LLMInterface,
     get_sales_bot_llm,
@@ -22,6 +25,12 @@ from controlplane.boundary.storageInterface.staffToHotelMapping import (  # noqa
     StaffToHotelMapping,
     normalize_phone,
 )
+from controlplane.control.commissionService import (  # noqa: E402
+    build_commission_notification,
+    calculate_and_distribute_commissions,
+    generate_sale_id,
+)
+from models.retry import RetryingWhapiClient  # noqa: E402
 from shared.logging_context import (  # noqa: E402
     log_low_confidence,
     log_medium_confidence,
@@ -50,7 +59,12 @@ DEFAULT_PROMPT = (
     '"Amount": number or 0, '
     '"confidence": "high/medium/low"}'
     "] "
-    "If Service, Date, Time, or Room is missing or unclear, set confidence to low. "
+    "SANITY CHECKS - set confidence to low if any of these fail: "
+    "1. Quantity <= 0 "
+    "2. Service is empty or unclear "
+    "3. Date format is invalid or missing "
+    "4. Time format is invalid or missing "
+    "5. Room is empty or missing "
     "Message: __MESSAGE__"
 )
 
@@ -98,6 +112,7 @@ _load_env_files()
 _sales_audit: SalesAudit | None = None
 _llm_interface: LLMInterface | None = None
 _staff_mapping: StaffToHotelMapping | None = None
+_notification_client: RetryingWhapiClient | None = None
 
 
 def _get_case_insensitive(row: dict[str, Any], keys: list[str]) -> Any | None:
@@ -139,6 +154,46 @@ def _get_staff_mapping() -> StaffToHotelMapping | None:
     return _staff_mapping
 
 
+def _get_notification_client() -> RetryingWhapiClient | None:
+    global _notification_client
+    if _notification_client is not None:
+        return _notification_client
+    try:
+        _notification_client = RetryingWhapiClient(WhapiClient())
+    except Exception as exc:
+        logger.warning("Notification client not configured: %s", exc)
+        _notification_client = None
+    return _notification_client
+
+
+def _send_commission_notification(
+    seller_name: str,
+    service: str,
+    commission_entries: list[dict[str, Any]],
+) -> None:
+    """Send commission notification to sales group."""
+    sales_group_id = (os.getenv("SALES_GROUP_ID") or "").strip()
+    if not sales_group_id:
+        logger.warning("SALES_GROUP_ID not set; skipping commission notification")
+        return
+
+    notification_client = _get_notification_client()
+    if notification_client is None:
+        logger.warning("Notification client not available; skipping commission notification")
+        return
+
+    message = build_commission_notification(seller_name, service, commission_entries)
+    if not message:
+        logger.info("No commission notification to send (empty message)")
+        return
+
+    try:
+        notification_client.send_text(to=sales_group_id, body=message)
+        logger.info("Commission notification sent to sales group")
+    except Exception as exc:
+        logger.error("Failed to send commission notification: %s", exc, exc_info=True)
+
+
 def llm_extract(message: str) -> dict[str, Any] | list[dict[str, Any]]:
     """LLM extracts structured data from message using configured provider."""
     prompt = DEFAULT_PROMPT.replace("__MESSAGE__", message)
@@ -178,6 +233,64 @@ def _required_fields_present(extracted: dict[str, Any]) -> bool:
         if isinstance(value, str) and not value.strip():
             return False
     return True
+
+
+def _validate_extracted_data(extracted: dict[str, Any]) -> tuple[bool, list[str]]:
+    """Validate extracted data with sanity checks.
+
+    Returns:
+        Tuple of (is_valid, list of validation failure reasons)
+    """
+    failures: list[str] = []
+
+    # Check Quantity > 0
+    quantity = _get_case_insensitive(extracted, ["Quantity"])
+    quantity_value = _coerce_quantity(quantity) if quantity is not None else 1.0
+    if quantity_value <= 0:
+        failures.append(f"Quantity is invalid or <= 0: {quantity}")
+        logger.warning("Sanity check failed: Quantity=%s (value=%s)", quantity, quantity_value)
+
+    # Check Service is not empty
+    service = _get_case_insensitive(extracted, ["Service"])
+    if not service or (isinstance(service, str) and not service.strip()):
+        failures.append("Service is empty or missing")
+        logger.warning("Sanity check failed: Service is empty")
+
+    # Check Date format (basic check for DD/MM/YYYY pattern)
+    date = _get_case_insensitive(extracted, ["Date"])
+    if not date or (isinstance(date, str) and not date.strip()):
+        failures.append("Date is empty or missing")
+        logger.warning("Sanity check failed: Date is empty")
+    elif isinstance(date, str):
+        import re
+
+        date_pattern = r"^\d{1,2}/\d{1,2}/\d{4}$"
+        if not re.match(date_pattern, date.strip()):
+            failures.append(f"Date format invalid (expected DD/MM/YYYY): {date}")
+            logger.warning("Sanity check failed: Date format invalid: %s", date)
+
+    # Check Time is not empty
+    time_val = _get_case_insensitive(extracted, ["Time"])
+    if not time_val or (isinstance(time_val, str) and not time_val.strip()):
+        failures.append("Time is empty or missing")
+        logger.warning("Sanity check failed: Time is empty")
+
+    # Check Room is not empty
+    room = _get_case_insensitive(extracted, ["Room"])
+    if not room or (isinstance(room, str) and not room.strip()):
+        failures.append("Room is empty or missing")
+        logger.warning("Sanity check failed: Room is empty")
+
+    # Check Guest is valid if present (should be a number)
+    guest = _get_case_insensitive(extracted, ["Guest"])
+    if guest and isinstance(guest, str) and guest.strip():
+        guest_value = _coerce_quantity(guest)
+        if guest_value <= 0:
+            failures.append(f"Guest count is invalid or <= 0: {guest}")
+            logger.warning("Sanity check failed: Guest=%s (value=%s)", guest, guest_value)
+
+    is_valid = len(failures) == 0
+    return is_valid, failures
 
 
 def _extract_hotel_name(message: str, extracted: dict[str, Any]) -> str | None:
@@ -273,6 +386,18 @@ def process_message(message: str, sender_id: str | None = None) -> None:
         if not _required_fields_present(entry):
             confidence = "low"
             entry["confidence"] = "low"
+
+        # Run sanity checks on extracted data
+        is_valid, validation_failures = _validate_extracted_data(entry)
+        if not is_valid:
+            confidence = "low"
+            entry["confidence"] = "low"
+            logger.warning(
+                "Entry %d failed sanity checks: %s",
+                idx,
+                "; ".join(validation_failures),
+            )
+
         if confidence == "low":
             log_low_confidence(
                 {
@@ -281,6 +406,7 @@ def process_message(message: str, sender_id: str | None = None) -> None:
                     "message": message,
                     "entry_index": idx,
                     "extracted": entry,
+                    "validation_failures": validation_failures if not is_valid else [],
                 }
             )
             logger.info("Skipping sheet write due to confidence=%s", confidence or "unknown")
@@ -317,10 +443,15 @@ def process_message(message: str, sender_id: str | None = None) -> None:
             quantity = 1
         quantity_value = _coerce_quantity(quantity)
         quantity_row: Any = int(quantity_value) if quantity_value.is_integer() else quantity_value
-        cost = _get_sales_audit().calculate_cost(service, quantity_value, llm=_get_llm_interface())
+        # Get selling price and cost price from Pricing_Sales sheet
+        selling_price = _get_sales_audit().get_selling_price(service, quantity_value, llm=_get_llm_interface())
+        cost_price = _get_sales_audit().calculate_cost(service, quantity_value, llm=_get_llm_interface())
+
+        # Generate unique sale ID for commission tracking
+        sale_id = generate_sale_id()
 
         try:
-            cost = _get_sales_audit().write_details_sheet(
+            _get_sales_audit().write_details_sheet(
                 [
                     service,
                     quantity_row,
@@ -329,16 +460,35 @@ def process_message(message: str, sender_id: str | None = None) -> None:
                     _get_case_insensitive(entry, ["Guest"]) or "",
                     _get_case_insensitive(entry, ["Room"]) or "",
                     staff_name,
-                    cost,
-                    "",
+                    selling_price,
+                    cost_price,
+                    "",  # Additional Details
                     hotel_name or extracted_hotel or "",
+                    sale_id,
                 ]
             )
         except Exception as exc:
             logger.error("SalesBot write failed: %s", exc, exc_info=True)
             continue
-        logger.info("SalesBot logged entry cost=Rs%s", cost)
+        logger.info(
+            "SalesBot logged entry: sale_id=%s, selling_price=%s, cost_price=%s",
+            sale_id,
+            selling_price,
+            cost_price,
+        )
         logger.info("SalesBot entry: %s", entry)
+
+        # Calculate and distribute commissions
+        commission_entries = calculate_and_distribute_commissions(
+            sale_id=sale_id,
+            selling_price=selling_price,
+            cost_price=cost_price,
+            seller_name=staff_name,
+        )
+
+        # Send notification to sales group
+        if commission_entries:
+            _send_commission_notification(staff_name, service, commission_entries)
 
 
 if __name__ == "__main__":

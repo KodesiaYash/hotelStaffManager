@@ -164,3 +164,26 @@ class WhapiClient:
         if caption:
             payload["caption"] = caption
         return self._request("POST", "/messages/document", json=payload)
+
+    def get_messages(
+        self,
+        chat_id: str,
+        *,
+        count: int = 100,
+        offset: int | None = None,
+    ) -> list[dict[str, Any]]:
+        """Fetch messages from a chat.
+
+        Args:
+            chat_id: The chat ID (e.g., '120363408154982447@g.us' for groups)
+            count: Number of messages to fetch (default 100, max 500)
+            offset: Offset for pagination
+
+        Returns:
+            List of message objects
+        """
+        params: dict[str, Any] = {"count": min(count, 500)}
+        if offset is not None:
+            params["offset"] = offset
+        result = self._request("GET", f"/messages/list/{chat_id}", params=params)
+        return result.get("messages", [])

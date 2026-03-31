@@ -14,6 +14,7 @@ if PROJECT_ROOT not in sys.path:
 
 from communicationPlane.whatsappEngine.whapiInterface.whapi_client import WhapiClient  # noqa: E402
 from controlplane.boundary.llminterface.gemini_interface import GeminiInterface  # noqa: E402
+from controlplane.boundary.storageInterface.saleCommissions import SaleCommissions  # noqa: E402
 from controlplane.boundary.storageInterface.salesAudit import SalesAudit  # noqa: E402
 from models.retry import RetryingWhapiClient  # noqa: E402
 
@@ -22,10 +23,13 @@ current_time_str = datetime.datetime.now(datetime.UTC).isoformat()
 
 DEFAULT_QUERY_PROMPT = (
     "You are a spreadsheet assistant for hotel sales operations. Answer the user's question using ONLY the provided "
-    "Google Sheets data. The sales audit sheet contains logged sales rows. "
-    "If the answer cannot be determined from the data, say that clearly. Be concise, unless asked to elaborate."
-    "If the user asks a query which requires a sense of time, use the current date and time provided in the input."
-    "use plain language\n\n"
+    "Google Sheets data. The data includes:\n"
+    "- Sales audit (Test_Sales): logged sales rows with Service, Quantity, Date, Time, Guest, Room, Assignee, "
+    "Selling Price, Cost Price, Hotel, and SaleID\n"
+    "- Sale Commissions: commission entries with SaleId, Commission Value, Name, and Phone\n\n"
+    "If the answer cannot be determined from the data, say that clearly. Be concise, unless asked to elaborate. "
+    "If the user asks a query which requires a sense of time, use the current date and time provided in the input. "
+    "Use plain language.\n\n"
     "User question:\n{question}\n\n"
     "Current Date and Time: {current_time_str}\n"
     "Spreadsheet data:\n{spreadsheet_data}\n"
@@ -42,6 +46,7 @@ def _load_env_files() -> None:
 _load_env_files()
 
 _sales_audit: SalesAudit | None = None
+_sale_commissions: SaleCommissions | None = None
 _llm_interface: GeminiInterface | None = None
 _reply_client: RetryingWhapiClient | None = None
 
@@ -51,6 +56,17 @@ def _get_sales_audit() -> SalesAudit:
     if _sales_audit is None:
         _sales_audit = SalesAudit()
     return _sales_audit
+
+
+def _get_sale_commissions() -> SaleCommissions | None:
+    global _sale_commissions
+    if _sale_commissions is not None:
+        return _sale_commissions
+    try:
+        _sale_commissions = SaleCommissions()
+    except Exception:
+        _sale_commissions = None
+    return _sale_commissions
 
 
 def _get_llm_interface() -> GeminiInterface:
@@ -87,7 +103,26 @@ def build_spreadsheet_context() -> dict[str, Any]:
         _get_sales_audit().read_details_sheet(),
         max_rows=_get_max_rows("QUERYBOT_MAX_DETAILS_ROWS", 200),
     )
-    return {"sales_audit_rows": details_rows, "sales_audit_row_count": len(details_rows)}
+    context: dict[str, Any] = {
+        "sales_audit_rows": details_rows,
+        "sales_audit_row_count": len(details_rows),
+    }
+
+    # Add sale commissions data
+    commissions_client = _get_sale_commissions()
+    if commissions_client is not None:
+        try:
+            commissions_rows = _trim_records(
+                commissions_client.read_commissions(),
+                max_rows=_get_max_rows("QUERYBOT_MAX_COMMISSIONS_ROWS", 500),
+            )
+            context["sale_commissions_rows"] = commissions_rows
+            context["sale_commissions_row_count"] = len(commissions_rows)
+        except Exception:
+            context["sale_commissions_rows"] = []
+            context["sale_commissions_row_count"] = 0
+
+    return context
 
 
 def answer_query(question: str) -> str:

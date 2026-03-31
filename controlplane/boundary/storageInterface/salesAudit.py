@@ -83,26 +83,42 @@ class SalesAudit:
         return self.connector.read_all_records(self.details_key)
 
     def write_details_sheet(self, data: Sequence[Any]) -> float:
+        """Write a row to the details sheet.
+
+        Expected columns:
+        0: Service Name, 1: Quantity, 2: Date, 3: Time, 4: Guest, 5: Room,
+        6: Assignee, 7: Selling Price, 8: Cost Price, 9: Additional Details,
+        10: hotelName, 11: SaleId
+        """
         row = list(data)
+        # Ensure minimum columns up to Assignee
         while len(row) < 7:
             row.append("")
 
-        cost: float | None = None
-        if len(row) >= 8:
-            cost = _parse_number(row[7])
+        # Get selling price from column 7
+        selling_price: float = _parse_number(row[7]) if len(row) > 7 else 0.0
+        if selling_price is None:
+            selling_price = 0.0
 
-        if cost is None:
+        # Get or calculate cost price from column 8
+        cost_price: float | None = None
+        if len(row) > 8:
+            cost_price = _parse_number(row[8])
+
+        if cost_price is None:
             service = str(row[0]) if row else ""
             quantity = row[1] if len(row) > 1 else 1
-            cost = self.calculate_cost(service, quantity)
+            cost_price = self.calculate_cost(service, quantity)
 
-        if len(row) < 8:
-            row.append(cost)
-        else:
-            row[7] = cost
+        # Ensure row has all 12 columns
+        while len(row) < 12:
+            row.append("")
+
+        row[7] = selling_price
+        row[8] = cost_price
 
         self.connector.append_row(self.details_key, row)
-        return float(cost)
+        return float(cost_price)
 
     def read_costs_sheet(self) -> list[dict[str, Any]]:
         if not self.pricelist:
@@ -138,7 +154,13 @@ class SalesAudit:
         unit_cost = _parse_number(
             _get_case_insensitive(
                 direct_match,
-                ["cost", "price", "rate", "unit_cost", "unit price", "unitprice", "amount"],
+                [
+                    "Cost Price(MAD)",
+                    "cost_price",
+                    "cost price",
+                    "cost",
+                    "unit_cost",
+                ],
             )
         )
         if unit_cost is None:
@@ -147,6 +169,51 @@ class SalesAudit:
         if qty is None:
             qty = 1
         return float(unit_cost) * float(qty)
+
+    def get_selling_price(self, service: str, quantity: float = 1, llm: LLMClient | None = None) -> float:
+        """Get selling price from Pricing_Sales sheet for a service."""
+        if not self.pricelist:
+            return 0.0
+
+        service_value = (service or "").strip().lower()
+        if not service_value:
+            return 0.0
+
+        records = self.pricelist.read_pricelist()
+        if not records:
+            return 0.0
+
+        direct_match = _find_pricelist_match(records, service_value)
+        if direct_match is None and llm:
+            matched_name = _llm_match_service(service_value, records, llm)
+            if matched_name:
+                direct_match = _find_pricelist_match(records, matched_name)
+
+        if direct_match is None:
+            return 0.0
+
+        unit_price = _parse_number(
+            _get_case_insensitive(
+                direct_match,
+                [
+                    "Selling Price (MAD)",
+                    "Selling Price",
+                    "selling_price",
+                    "selling price",
+                    "price",
+                    "rate",
+                    "amount",
+                    "unit price",
+                    "unitprice",
+                ],
+            )
+        )
+        if unit_price is None:
+            return 0.0
+        qty = _parse_number(quantity)
+        if qty is None:
+            qty = 1
+        return float(unit_price) * float(qty)
 
     def export_details_to_csv(self, filename: str = "details_export.csv") -> None:
         records = self.read_details_sheet()
