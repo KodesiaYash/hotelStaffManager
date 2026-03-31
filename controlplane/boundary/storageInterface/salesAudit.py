@@ -138,17 +138,7 @@ class SalesAudit:
         unit_cost = _parse_number(
             _get_case_insensitive(
                 direct_match,
-                [
-                    "cost",
-                    "price",
-                    "selling price",
-                    "selling price (mad)",
-                    "selling price mad",
-                    "rate",
-                    "unit_cost",
-                    "unit price",
-                    "unitprice",
-                ],
+                ["cost", "price", "rate", "unit_cost", "unit price", "unitprice", "amount"],
             )
         )
         if unit_cost is None:
