@@ -141,13 +141,11 @@ class SalesAudit:
                 [
                     "cost",
                     "price",
-                    "selling price",
-                    "selling price (mad)",
-                    "selling price mad",
                     "rate",
                     "unit_cost",
                     "unit price",
                     "unitprice",
+                    "amount"
                 ],
             )
         )
@@ -240,8 +238,8 @@ def _llm_match_service(service_value: str, records: list[dict[str, Any]], llm: L
     top_candidates = scored[:20]
     prompt = (
         "You are matching a service name to a price list. "
-        'Return ONLY JSON: {"match": "<exact candidate or empty>", "confidence": "high|medium|low"}.\n\n'
-        f'Service to match: "{service_value}"\n'
+        "Return ONLY JSON: {\"match\": \"<exact candidate or empty>\", \"confidence\": \"high|medium|low\"}.\n\n"
+        f"Service to match: \"{service_value}\"\n"
         f"Candidates: {top_candidates}\n"
     )
     try:

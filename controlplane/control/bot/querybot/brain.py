@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import datetime
 import json
 import os
 import sys
 from typing import Any
-import datetime
+
 from dotenv import load_dotenv
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
@@ -12,17 +13,17 @@ if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
 from communicationPlane.whatsappEngine.whapiInterface.whapi_client import WhapiClient  # noqa: E402
-from controlplane.boundary.llminterface.gemini_interface import GeminiInterface  # noqa: E402 # noqa: E402
+from controlplane.boundary.llminterface.gemini_interface import GeminiInterface  # noqa: E402
 from controlplane.boundary.storageInterface.salesAudit import SalesAudit  # noqa: E402
-from models.chat_message import ChatMessage  # noqa: E402
 from models.retry import RetryingWhapiClient  # noqa: E402
 
 """LLM is stateless, need to make it aware of current date and time by injecting it in the prompt"""
-current_time_str = datetime.datetime.now(datetime.timezone.utc).isoformat()
+current_time_str = datetime.datetime.now(datetime.UTC).isoformat()
 
 DEFAULT_QUERY_PROMPT = (
     "You are a spreadsheet assistant for hotel sales operations. Answer the user's question using ONLY the provided "
-    "Google Sheets data. The sales audit sheet contains logged sales rows. If the answer cannot be determined from the data, say that clearly. Be concise, unless asked to elaborate."
+    "Google Sheets data. The sales audit sheet contains logged sales rows. "
+    "If the answer cannot be determined from the data, say that clearly. Be concise, unless asked to elaborate."
     "If the user asks a query which requires a sense of time, use the current date and time provided in the input."
     "use plain language\n\n"
     "User question:\n{question}\n\n"
@@ -50,6 +51,7 @@ def _get_sales_audit() -> SalesAudit:
     if _sales_audit is None:
         _sales_audit = SalesAudit()
     return _sales_audit
+
 
 def _get_llm_interface() -> GeminiInterface:
     global _llm_interface
@@ -79,15 +81,13 @@ def _trim_records(records: list[dict[str, Any]], *, max_rows: int) -> list[dict[
         return records
     return records[-max_rows:]
 
+
 def build_spreadsheet_context() -> dict[str, Any]:
     details_rows = _trim_records(
         _get_sales_audit().read_details_sheet(),
         max_rows=_get_max_rows("QUERYBOT_MAX_DETAILS_ROWS", 200),
     )
-    return {
-        "sales_audit_rows": details_rows,
-        "sales_audit_row_count": len(details_rows)
-    }
+    return {"sales_audit_rows": details_rows, "sales_audit_row_count": len(details_rows)}
 
 
 def answer_query(question: str) -> str:
@@ -103,6 +103,6 @@ def answer_query(question: str) -> str:
     return answer
 
 
-def process_message(message: str, chat_id:str) -> None:
+def process_message(message: str, chat_id: str) -> None:
     answer = answer_query(message or "")
     _get_reply_client().send_text(to=chat_id, body=answer)
