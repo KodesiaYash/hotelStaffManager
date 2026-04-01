@@ -184,12 +184,12 @@ def _send_commission_notification(
 
     message = build_commission_notification(seller_name, service, commission_entries)
     if not message:
-        logger.info("No commission notification to send (empty message)")
+        logger.debug("No commission notification to send (empty message)")
         return
 
     try:
         notification_client.send_text(to=sales_group_id, body=message)
-        logger.info("Commission notification sent to sales group")
+        logger.info("Commission notification sent to sales_group=%s", sales_group_id)
     except Exception as exc:
         logger.error("Failed to send commission notification: %s", exc, exc_info=True)
 
@@ -198,30 +198,68 @@ def llm_extract(message: str) -> dict[str, Any] | list[dict[str, Any]]:
     """LLM extracts structured data from message using configured provider."""
     prompt = DEFAULT_PROMPT.replace("__MESSAGE__", message)
 
-    logger.info("SalesBot LLM extract prompt length=%d", len(prompt))
-    response_text = _get_llm_interface().generate(prompt)
-    extracted = _safe_json_load(response_text)
-    if isinstance(extracted, dict) and extracted.get("error") == "parse_failed":
-        logger.info("SalesBot parse failed, retrying with strict JSON prompt")
-        prompt = f"{prompt}\nCRITICAL: Pure JSON, no extra text."
+    logger.debug("SalesBot LLM extract prompt length=%d", len(prompt))
+    try:
         response_text = _get_llm_interface().generate(prompt)
-        extracted = _safe_json_load(response_text)
+    except Exception as exc:
+        logger.error(
+            "SalesBot LLM call failed error=%s message_preview=%s",
+            str(exc)[:100],
+            message[:200],
+        )
+        return {"error": "llm_call_failed", "exception": str(exc), "message": message[:500]}
+
+    extracted = _safe_json_load(response_text, original_message=message)
+    if isinstance(extracted, dict) and extracted.get("error") == "parse_failed":
+        logger.warning(
+            "SalesBot LLM parse failed on first attempt, retrying message_len=%d",
+            len(message),
+        )
+        prompt = f"{prompt}\nCRITICAL: Pure JSON, no extra text."
+        try:
+            response_text = _get_llm_interface().generate(prompt)
+        except Exception as exc:
+            logger.error(
+                "SalesBot LLM retry call failed error=%s message_preview=%s",
+                str(exc)[:100],
+                message[:200],
+            )
+            return {"error": "llm_retry_failed", "exception": str(exc), "message": message[:500]}
+        extracted = _safe_json_load(response_text, original_message=message)
+        if isinstance(extracted, dict) and extracted.get("error") == "parse_failed":
+            logger.warning(
+                "SalesBot LLM parse failed after retry message_preview=%s raw_response=%s",
+                message[:200],
+                (response_text or "")[:200],
+            )
     return extracted
 
 
-def _safe_json_load(text: str | None) -> dict[str, Any] | list[dict[str, Any]]:
+def _safe_json_load(
+    text: str | None,
+    original_message: str | None = None,
+) -> dict[str, Any] | list[dict[str, Any]]:
     if not text:
-        return {"error": "empty_response"}
+        logger.warning(
+            "SalesBot LLM returned empty response message_preview=%s",
+            (original_message or "")[:200],
+        )
+        return {"error": "empty_response", "message": (original_message or "")[:500]}
     cleaned = text.strip()
     cleaned = re.sub(r"```json\s*|\s*```", "", cleaned, flags=re.IGNORECASE).strip()
     cleaned = cleaned.replace("\\n", "").replace("\\t", "")
     try:
         return json.loads(cleaned)
     except json.JSONDecodeError as exc:
-        logger.info("JSON Error: %s", exc)
-        logger.info("Raw (first 120): %r", text[:120])
-        logger.info("Cleaned (first 120): %r", cleaned[:120])
-        return {"error": "parse_failed", "raw": cleaned}
+        logger.debug("JSON Error: %s", exc)
+        logger.debug("Raw (first 200): %r", text[:200])
+        logger.debug("Cleaned (first 200): %r", cleaned[:200])
+        return {
+            "error": "parse_failed",
+            "raw": cleaned[:500],
+            "message": (original_message or "")[:500],
+            "json_error": str(exc),
+        }
 
 
 def _required_fields_present(extracted: dict[str, Any]) -> bool:
@@ -362,10 +400,15 @@ def _resolve_staff_and_hotel(
 
 
 def process_message(message: str, sender_id: str | None = None) -> None:
-    logger.info("SalesBot processing message length=%d", len(message))
+    logger.debug("SalesBot processing message length=%d sender_id=%s", len(message), sender_id)
     extracted = llm_extract(message)
     if isinstance(extracted, dict) and "error" in extracted:
-        logger.error("SalesBot extraction failed: %s", extracted)
+        logger.error(
+            "SalesBot extraction failed error=%s sender_id=%s message_preview=%s",
+            extracted.get("error"),
+            sender_id,
+            message[:200],
+        )
         return
 
     entries: list[dict[str, Any]]
@@ -374,11 +417,20 @@ def process_message(message: str, sender_id: str | None = None) -> None:
     elif isinstance(extracted, dict):
         entries = [extracted]
     else:
-        logger.error("SalesBot extraction returned unsupported type: %s", type(extracted))
+        logger.error(
+            "SalesBot extraction returned unsupported type=%s sender_id=%s message_preview=%s",
+            type(extracted).__name__,
+            sender_id,
+            message[:200],
+        )
         return
 
     if not entries:
-        logger.error("SalesBot extraction returned empty entries")
+        logger.error(
+            "SalesBot extraction returned empty entries sender_id=%s message_preview=%s",
+            sender_id,
+            message[:200],
+        )
         return
 
     for idx, entry in enumerate(entries):
@@ -409,7 +461,7 @@ def process_message(message: str, sender_id: str | None = None) -> None:
                     "validation_failures": validation_failures if not is_valid else [],
                 }
             )
-            logger.info("Skipping sheet write due to confidence=%s", confidence or "unknown")
+            logger.info("SalesBot confidence=%s skipping sheet write", confidence or "unknown")
             continue
         if confidence == "medium":
             log_medium_confidence(
@@ -422,7 +474,7 @@ def process_message(message: str, sender_id: str | None = None) -> None:
                 }
             )
         if confidence not in {"high", "medium"}:
-            logger.info("Skipping sheet write due to confidence=%s", confidence or "unknown")
+            logger.info("SalesBot confidence=%s skipping sheet write", confidence or "unknown")
             continue
 
         extracted_hotel = _extract_hotel_name(message, entry)
@@ -432,7 +484,11 @@ def process_message(message: str, sender_id: str | None = None) -> None:
             str(_get_case_insensitive(entry, ["Asignee"]) or "").strip() or None,
         )
         if mapping_error:
-            logger.error("Skipping sheet write due to staff/hotel mapping error")
+            logger.error(
+                "SalesBot skipping sheet write staff_mapping_error sender_id=%s message_preview=%s",
+                sender_id,
+                message[:200],
+            )
             continue
 
         service = _get_case_insensitive(entry, ["Service"]) or ""
@@ -471,12 +527,14 @@ def process_message(message: str, sender_id: str | None = None) -> None:
             logger.error("SalesBot write failed: %s", exc, exc_info=True)
             continue
         logger.info(
-            "SalesBot logged entry: sale_id=%s, selling_price=%s, cost_price=%s",
+            "SalesBot sheet write success sale_id=%s service=%s confidence=%s selling_price=%s cost_price=%s",
             sale_id,
+            service,
+            confidence,
             selling_price,
             cost_price,
         )
-        logger.info("SalesBot entry: %s", entry)
+        logger.debug("SalesBot entry details: %s", entry)
 
         # Calculate and distribute commissions
         commission_entries = calculate_and_distribute_commissions(

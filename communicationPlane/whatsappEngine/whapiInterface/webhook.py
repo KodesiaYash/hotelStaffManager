@@ -38,7 +38,7 @@ def create_whapi_blueprint(handler: PayloadHandler) -> Blueprint:
                 logger.error("Webhook failed: %s", exc, exc_info=True)
                 return jsonify({"status": "error", "request_id": request_id}), 500
             elapsed_ms = int((time.time() - started) * 1000)
-            logger.info(
+            logger.debug(
                 "Webhook processed=%d elapsed_ms=%d",
                 len(messages),
                 elapsed_ms,

@@ -1,0 +1,74 @@
+version: "3.8"
+
+services:
+  # ============================================
+  # APPLICATION
+  # ============================================
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: salesbot-app
+    ports:
+      - "5050:5051"  # Host:Container
+    env_file:
+      - ./env
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=5051
+      - LOG_LEVEL=INFO
+    volumes:
+      - ./logs:/app/logs
+      - ./envConfig:/app/envConfig:ro
+      # Mount source code for development (hot reload)
+      - ./communicationPlane:/app/communicationPlane:ro
+      - ./controlplane:/app/controlplane:ro
+      - ./models:/app/models:ro
+      - ./shared:/app/shared:ro
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  # ============================================
+  # OBSERVABILITY STACK
+  # ============================================
+  loki:
+    image: grafana/loki:2.9.0
+    container_name: loki
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./observability/loki-config.yml:/etc/loki/local-config.yaml
+      - ./observability/data/loki:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+
+  promtail:
+    image: grafana/promtail:2.9.0
+    container_name: promtail
+    volumes:
+      - ./observability/promtail-config.yml:/etc/promtail/config.yml
+      - ./logs:/var/log/salesbot:ro
+    command: -config.file=/etc/promtail/config.yml
+    depends_on:
+      - loki
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.0.0
+    container_name: grafana
+    ports:
+      - "3000:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./observability/data/grafana:/var/lib/grafana
+      - ./observability/grafana-provisioning:/etc/grafana/provisioning
+    depends_on:
+      - loki
+    restart: unless-stopped

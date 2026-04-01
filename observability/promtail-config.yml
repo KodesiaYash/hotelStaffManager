@@ -1,0 +1,58 @@
+server:
+  http_listen_port: 9080
+  grpc_listen_port: 0
+
+positions:
+  filename: /tmp/positions.yaml
+
+clients:
+  - url: http://loki:3100/loki/api/v1/push
+
+scrape_configs:
+  # Scrape all JSONL logs from salesbot application
+  - job_name: salesbot
+    static_configs:
+      - targets:
+          - localhost
+        labels:
+          job: salesbot
+          env: production
+          __path__: /var/log/salesbot/*.jsonl
+
+    pipeline_stages:
+      # Parse JSON logs
+      - json:
+          expressions:
+            level: level
+            logger: logger
+            message: message
+            timestamp: timestamp
+            request_id: request_id
+            message_id: message_id
+            chat_id: chat_id
+            chat_name: chat_name
+            sender_id: sender_id
+            sender_name: sender_name
+            source: source
+            event: event
+            confidence: confidence
+
+      # Extract labels for efficient querying
+      - labels:
+          level:
+          logger:
+          source:
+          chat_id:
+          sender_id:
+          sender_name:
+          event:
+          confidence:
+
+      # Use timestamp from log if available
+      - timestamp:
+          source: timestamp
+          format: RFC3339
+
+      # Output the message as the log line
+      - output:
+          source: message
