@@ -238,7 +238,7 @@ class DutchTutor:
             or bank[idx].get("difficulty") in KNM_PRIORITY_DIFFICULTIES
         ]
         pool = priority if priority else eligible
-        return bank[random.choice(pool)]
+        return bank[random.choice(pool)]  # nosec B311
 
     @staticmethod
     def _pick_new(bank: list[dict[str, Any]], sent: set[int]) -> tuple[dict[str, Any] | None, set[int]]:
@@ -248,7 +248,7 @@ class DutchTutor:
         if not available:
             sent = set()
             available = list(range(len(bank)))
-        idx = random.choice(available)
+        idx = random.choice(available)  # nosec B311
         sent.add(idx)
         return bank[idx], sent
 
@@ -306,13 +306,13 @@ class DutchTutor:
             return None, False, False
 
         if has_vocab and has_quiz:
-            is_vocab = random.random() < VOCAB_WEIGHT
+            is_vocab = random.random() < VOCAB_WEIGHT  # nosec B311
         elif has_vocab:
             is_vocab = True
         else:
             is_vocab = False
 
-        if random.random() < REVISION_CHANCE:
+        if random.random() < REVISION_CHANCE:  # nosec B311
             bank = self._vocab_bank if is_vocab else self._quiz_bank
             history = self._vocab_history if is_vocab else self._quiz_history
             item = self._pick_revision(bank, history)
@@ -367,7 +367,9 @@ class DutchTutor:
 
     def _schedule_loop(self) -> None:
         while self._running:
-            delays = sorted(random.uniform(0, ONE_HOUR_SECONDS) for _ in range(MESSAGES_PER_HOUR))
+            delays = sorted(
+                random.uniform(0, ONE_HOUR_SECONDS) for _ in range(MESSAGES_PER_HOUR)  # nosec B311
+            )
             cycle_start = time.time()
             for delay in delays:
                 wait = cycle_start + delay - time.time()
