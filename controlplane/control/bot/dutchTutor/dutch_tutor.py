@@ -368,8 +368,8 @@ class DutchTutor:
     def _schedule_loop(self) -> None:
         while self._running:
             delays = sorted(
-                random.uniform(0, ONE_HOUR_SECONDS)
-                for _ in range(MESSAGES_PER_HOUR)  # nosec B311
+                random.uniform(0, ONE_HOUR_SECONDS)  # nosec B311
+                for _ in range(MESSAGES_PER_HOUR)
             )
             cycle_start = time.time()
             for delay in delays:
