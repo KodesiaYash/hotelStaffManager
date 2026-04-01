@@ -14,6 +14,7 @@ _CONTEXT_VARS: dict[str, contextvars.ContextVar[str | None]] = {
     "chat_id": contextvars.ContextVar("chat_id", default=None),
     "chat_name": contextvars.ContextVar("chat_name", default=None),
     "sender_id": contextvars.ContextVar("sender_id", default=None),
+    "sender_name": contextvars.ContextVar("sender_name", default=None),
     "request_id": contextvars.ContextVar("request_id", default=None),
     "source": contextvars.ContextVar("source", default=None),
 }
@@ -61,6 +62,7 @@ class LogContext:
     chat_id: str | None = None
     chat_name: str | None = None
     sender_id: str | None = None
+    sender_name: str | None = None
     request_id: str | None = None
     source: str | None = None
     _tokens: dict[str, contextvars.Token] | None = None
@@ -71,6 +73,7 @@ class LogContext:
             chat_id=self.chat_id,
             chat_name=self.chat_name,
             sender_id=self.sender_id,
+            sender_name=self.sender_name,
             request_id=self.request_id,
             source=self.source,
         )
@@ -96,6 +99,9 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, ensure_ascii=False)
 
 
+_DEFAULT_APP_LOG_PATH = os.path.join(_PROJECT_ROOT, "logs", "app.jsonl")
+
+
 def init_logging(level: str | None = None) -> None:
     global _LOGGING_CONFIGURED
     if _LOGGING_CONFIGURED:
@@ -107,6 +113,18 @@ def init_logging(level: str | None = None) -> None:
     root.handlers.clear()
     root.setLevel(log_level)
     root.addHandler(handler)
+
+    # Add file handler for all logs (for Promtail/Loki)
+    app_log_path = os.getenv("APP_LOG_PATH") or _DEFAULT_APP_LOG_PATH
+    if not os.path.isabs(app_log_path):
+        app_log_path = os.path.join(_ABS_PROJECT_ROOT, app_log_path)
+    _ensure_parent_dir(app_log_path)
+    app_handler = logging.FileHandler(app_log_path)
+    app_handler.setLevel(log_level)
+    app_handler.setFormatter(JsonFormatter())
+    root.addHandler(app_handler)
+
+    # Error-only file handler
     error_path = os.getenv("ERROR_LOG_PATH") or _DEFAULT_ERROR_PATH
     if not os.path.isabs(error_path):
         error_path = os.path.join(_ABS_PROJECT_ROOT, error_path)

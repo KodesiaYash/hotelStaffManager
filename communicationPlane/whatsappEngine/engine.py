@@ -59,17 +59,19 @@ class WhatsAppEngine:
 
     def process_payload(self, payload: dict[str, Any]) -> list[ChatMessage]:
         raw_messages = payload.get("messages") or []
-        logger.info("WHAPI payload received with %d message(s)", len(raw_messages))
+        logger.debug("WHAPI payload received with %d message(s)", len(raw_messages))
         processed: list[ChatMessage] = []
         for raw in raw_messages:
             whapi_message = WhapiMessage.from_raw(raw)
             chat_name = _extract_chat_name(raw)
+            sender_name = raw.get("from_name") or ""
             dedup_id = build_dedup_id(whapi_message)
             with LogContext(
                 message_id=dedup_id,
                 chat_id=whapi_message.chat_id,
                 chat_name=chat_name,
                 sender_id=whapi_message.from_id,
+                sender_name=sender_name,
                 source="whapi",
             ):
                 if self.ignore_from_me and raw.get("from_me") is True:
@@ -80,12 +82,12 @@ class WhatsAppEngine:
                     continue
                 chat_message = ChatMessage.from_whapi(whapi_message, dedup_id)
                 logger.info(
-                    "Dispatching message type=%s text_len=%s",
+                    "Dispatching message type=%s text_len=%d",
                     chat_message.message_type,
                     len(chat_message.text or ""),
                 )
-                logger.info("Message payload: %s", chat_message.raw)
+                logger.debug("Message payload: %s", chat_message.raw)
                 self.control_plane.process(chat_message)
                 processed.append(chat_message)
-        logger.info("Processed %d message(s) from payload", len(processed))
+        logger.debug("Processed %d message(s) from payload", len(processed))
         return processed

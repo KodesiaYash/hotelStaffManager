@@ -58,30 +58,54 @@ class ControlPlaneInterface:
 
     def process(self, message: ChatMessage) -> None:
         logger.info(
-            "ControlPlane received message id=%s source=%s chat_id=%s",
+            "ControlPlane received message id=%s source=%s chat_id=%s sender_id=%s text_len=%d",
             message.message_id,
             message.source,
             message.chat_id,
+            message.sender_id,
+            len(message.text or ""),
         )
-        if (
+        if message.source == "whapi" and message.is_group:
+            # For group messages, check against sales group ID
+            if self._sales_group_id and message.chat_id != self._sales_group_id:
+                logger.debug("Ignoring message outside sales group (chat_id=%s)", message.chat_id)
+                return
+        elif (
             message.source == "whapi"
-            and message.is_group
-            and self._sales_group_id
-            and message.chat_id != self._sales_group_id
+            and not message.is_group
+            and self._allowed_chat_ids
+            and message.chat_id not in self._allowed_chat_ids
         ):
-            logger.info("Ignoring message outside sales group (chat_id=%s)", message.chat_id)
-            return
-        if message.source == "whapi" and self._allowed_chat_ids and message.chat_id not in self._allowed_chat_ids:
-            logger.info("Ignoring message outside allowed chats (chat_id=%s)", message.chat_id)
+            # For DMs, check against allowed chat IDs (if configured)
+            logger.debug("Ignoring DM outside allowed chats (chat_id=%s)", message.chat_id)
             return
         if not message.text:
-            logger.info("Ignoring message %s with no text", message.message_id)
+            logger.debug("Ignoring message %s with no text", message.message_id)
             return
 
         if message.source == "whapi":
             if message.is_group:
-                logger.info("Routing to SalesBot")
-                self._sales_bot_handler(message.text, message.sender_id)
+                logger.info("Routing to SalesBot chat_id=%s sender_id=%s", message.chat_id, message.sender_id)
+                try:
+                    self._sales_bot_handler(message.text, message.sender_id)
+                except Exception as exc:
+                    logger.error(
+                        "SalesBot handler failed error=%s chat_id=%s sender_id=%s message_preview=%s",
+                        str(exc)[:100],
+                        message.chat_id,
+                        message.sender_id,
+                        (message.text or "")[:200],
+                        exc_info=True,
+                    )
             else:
-                logger.info("Routing to QueryBot")
-                self._query_bot_handler(message.text, message.chat_id)
+                logger.info("Routing to QueryBot chat_id=%s", message.chat_id)
+                try:
+                    self._query_bot_handler(message.text, message.chat_id)
+                except Exception as exc:
+                    logger.error(
+                        "QueryBot handler failed error=%s chat_id=%s message_preview=%s",
+                        str(exc)[:100],
+                        message.chat_id,
+                        (message.text or "")[:200],
+                        exc_info=True,
+                    )

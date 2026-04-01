@@ -421,10 +421,103 @@ graph TD
 - Prefer the WHAPI message `id` when present.
 - If it is missing, derive a stable ID from `chat_id`, `from`, `timestamp`, `type`, and `text` and hash it.
 
+## Logging & Observability
+
+### Log Levels
+The application uses structured JSON logging with the following levels:
+- **INFO**: Key business events (webhook received, message dispatched, routing decisions, sheet writes, notifications)
+- **DEBUG**: Detailed diagnostic info (payloads, context building, LLM prompts)
+- **WARNING**: Unexpected but handled situations (missing mappings, validation failures)
+- **ERROR**: Failures requiring attention (extraction failures, write errors)
+
+### INFO Log Flow
+```
+Webhook → Dispatching message → ControlPlane received → Routing to Bot
+                                                              ↓
+                                              SalesBot: confidence, sheet write, notification
+                                              QueryBot: LLM prompt/answer, reply sent
+```
+
+### Key Searchable Fields
+| Field | Description | Example |
+|-------|-------------|---------|
+| `level` | Log level | `INFO`, `ERROR` |
+| `logger` | Module name | `controlplane.control.bot.salesbot.brain` |
+| `chat_id` | WhatsApp chat ID | `120363199042263385@g.us` |
+| `sender_id` | Sender phone | `212624839981` |
+| `sender_name` | WhatsApp display name | `Yash Kodesia` |
+| `message_id` | Unique message ID | `Oo_y12aVANsmAw-gqEBq52xGvGZWQ` |
+| `request_id` | Request trace ID | `ed09905b-801e-43a5-ba54-fcd0e1233a21` |
+| `source` | Message source | `whapi`, `whapi_webhook` |
+| `confidence` | Extraction confidence | `high`, `medium`, `low` |
+
+### Docker Setup
+
+**Run everything (app + observability):**
+```bash
+docker-compose up -d
+```
+
+**Run only observability (if running app locally):**
+```bash
+cd observability && docker-compose up -d
+```
+
+**Rebuild after code changes:**
+```bash
+docker-compose restart app  # For code changes (volumes mounted)
+docker-compose up -d --build app  # For dependency changes
+```
+
+### Access Points
+| Service | URL | Credentials |
+|---------|-----|-------------|
+| App (Webhook) | http://localhost:5050 | - |
+| Grafana | http://localhost:3000 | admin / admin |
+| Loki API | http://localhost:3100 | - |
+
+### LogQL Query Examples
+
+**All errors:**
+```logql
+{job="salesbot"} |= "ERROR"
+```
+
+**SalesBot sheet writes:**
+```logql
+{job="salesbot", logger=~".*salesbot.*"} |= "sheet write success"
+```
+
+**Filter by chat_id:**
+```logql
+{job="salesbot"} | json | chat_id="120363199042263385@g.us"
+```
+
+**Filter by confidence level:**
+```logql
+{job="salesbot"} |= "confidence=" | json | line_format "{{.message}}"
+```
+
+**QueryBot replies:**
+```logql
+{job="salesbot", logger=~".*querybot.*"} |= "reply sent"
+```
+
+**Count errors by type (last 1h):**
+```logql
+sum by (logger) (count_over_time({job="salesbot"} |= "ERROR" [1h]))
+```
+
+### Enable DEBUG Logging
+```bash
+LOG_LEVEL=DEBUG ./communicationPlane/publicTrafficHandler/start_whatsapp_stack.sh
+```
+
 ## Troubleshooting
 - **Service account file not found**: check `GOOGLE_SHEETS_KEY` path.
 - **Permission denied on sheets**: share the sheets with the service account email.
 - **Gemini errors**: confirm `GEMINI_API_KEY` is valid and has quota.
+- **No logs in Grafana**: ensure logs are being written to `logs/` directory and Promtail container is running.
 
 ## ECB Pattern (Brief)
 This project follows an **ECB (Entity–Boundary–Control)** pattern:

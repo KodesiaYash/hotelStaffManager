@@ -1,0 +1,2 @@
+# Ignore persistent data folders (large, machine-specific)
+data/

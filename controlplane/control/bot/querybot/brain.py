@@ -2,11 +2,14 @@ from __future__ import annotations
 
 import datetime
 import json
+import logging
 import os
 import sys
 from typing import Any
 
 from dotenv import load_dotenv
+
+logger = logging.getLogger(__name__)
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
 if PROJECT_ROOT not in sys.path:
@@ -126,18 +129,65 @@ def build_spreadsheet_context() -> dict[str, Any]:
 
 
 def answer_query(question: str) -> str:
-    context = build_spreadsheet_context()
+    logger.debug("QueryBot building spreadsheet context")
+    try:
+        context = build_spreadsheet_context()
+    except Exception as exc:
+        logger.error(
+            "QueryBot failed to build context error=%s question_preview=%s",
+            str(exc)[:100],
+            question[:200],
+            exc_info=True,
+        )
+        return "I encountered an error accessing the spreadsheet data. Please try again."
+
+    logger.debug(
+        "QueryBot context: sales_rows=%d, commissions_rows=%d",
+        context.get("sales_audit_row_count", 0),
+        context.get("sale_commissions_row_count", 0),
+    )
     prompt = DEFAULT_QUERY_PROMPT.format(
         question=question.strip(),
         spreadsheet_data=json.dumps(context, ensure_ascii=True, default=str),
         current_time_str=current_time_str,
     )
-    answer = (_get_llm_interface().generate(prompt) or "").strip()
+    logger.info("QueryBot LLM prompt_len=%d question_len=%d", len(prompt), len(question))
+
+    try:
+        answer = (_get_llm_interface().generate(prompt) or "").strip()
+    except Exception as exc:
+        logger.error(
+            "QueryBot LLM call failed error=%s question_preview=%s",
+            str(exc)[:100],
+            question[:200],
+            exc_info=True,
+        )
+        return "I encountered an error processing your question. Please try again."
+
     if not answer:
+        logger.warning("QueryBot LLM returned empty answer question_preview=%s", question[:200])
         return "I can not answer this question from the spreadsheet data."
+    logger.info("QueryBot LLM answer_len=%d", len(answer))
     return answer
 
 
 def process_message(message: str, chat_id: str) -> None:
-    answer = answer_query(message or "")
-    _get_reply_client().send_text(to=chat_id, body=answer)
+    logger.debug("QueryBot processing message length=%d chat_id=%s", len(message or ""), chat_id)
+
+    if not message or not message.strip():
+        logger.warning("QueryBot received empty message chat_id=%s", chat_id)
+        answer = "I received an empty message. Please send your question."
+    else:
+        answer = answer_query(message)
+
+    try:
+        _get_reply_client().send_text(to=chat_id, body=answer)
+        logger.info("QueryBot reply sent chat_id=%s answer_len=%d", chat_id, len(answer))
+    except Exception as exc:
+        logger.error(
+            "QueryBot failed to send reply error=%s chat_id=%s answer_preview=%s",
+            str(exc)[:100],
+            chat_id,
+            answer[:200],
+            exc_info=True,
+        )

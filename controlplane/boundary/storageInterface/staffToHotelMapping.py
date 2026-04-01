@@ -45,7 +45,8 @@ def build_staff_mapping_config(env: Mapping[str, str] | None = None) -> dict[str
 def _normalize_phone(value: str | None) -> str:
     if not value:
         return ""
-    digits = re.sub(r"\\D", "", value)
+    # Remove all non-digit characters (spaces, dashes, plus signs, etc.)
+    digits = re.sub(r"\D", "", value)
     return digits
 
 

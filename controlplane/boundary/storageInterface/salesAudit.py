@@ -96,9 +96,8 @@ class SalesAudit:
             row.append("")
 
         # Get selling price from column 7
-        selling_price: float = _parse_number(row[7]) if len(row) > 7 else 0.0
-        if selling_price is None:
-            selling_price = 0.0
+        selling_price_raw = _parse_number(row[7]) if len(row) > 7 else None
+        selling_price: float = selling_price_raw if selling_price_raw is not None else 0.0
 
         # Get or calculate cost price from column 8
         cost_price: float | None = None
