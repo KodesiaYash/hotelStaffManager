@@ -10,6 +10,7 @@ from collections import deque
 from typing import Any
 
 from controlplane.boundary.llminterface.chatgpt_interface import ChatGPTInterface
+
 from communicationPlane.whatsappEngine.whapiInterface.whapi_client import WhapiClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
@@ -23,7 +24,6 @@ GENERATE_KNM_VOCAB_PROMPT = (
     "Maatschappij) exam and inburgering. Focus on official names and KNM society topics: "
     "government, gemeente, healthcare, work, education, taxes, rights, and public services. "
     "These must be the 200 most common MEDIUM/HARD words used in KNM preparation.\n\n"
-
     "WORD TYPES TO INCLUDE (balanced, KNM-focused):\n"
     "1. VERBS (exactly 25% = 50 verbs): Practical KNM verbs in infinitive form — "
     "aanvragen, inschrijven, inloggen, controleren, melden, regelen, invullen, "
@@ -39,38 +39,35 @@ GENERATE_KNM_VOCAB_PROMPT = (
     "3. ADJECTIVES/PHRASES: Society and civic life — verplicht, toegestaan, verboden, "
     "gelijkwaardig, verantwoordelijk, zelfstandig, officieel, tijdelijk, permanent, "
     "openbaar, particulier, schriftelijk, mondeling\n\n"
-
     "Each entry must be a JSON object with these keys:\n"
-    "1. \"dutch\": the Dutch word or verb (infinitive for verbs)\n"
-    "2. \"english\": English meaning\n"
-    "3. \"type\": one of [\"verb\", \"noun\", \"adjective\", \"phrase\", \"fact\"]\n"
-    "4. \"example_dutch\": a short A2-level Dutch sentence using the word\n"
-    "5. \"example_english\": English translation of the sentence\n"
-    "6. \"category\": one of [\"healthcare\", \"children\", \"tax\", \"government\", "
-    "\"society\", \"unemployment\", \"education\", \"country_knowledge\", \"daily_life\"]\n"
-    "7. \"difficulty\": one of [\"medium\", \"hard\"]\n\n"
-
+    '1. "dutch": the Dutch word or verb (infinitive for verbs)\n'
+    '2. "english": English meaning\n'
+    '3. "type": one of ["verb", "noun", "adjective", "phrase", "fact"]\n'
+    '4. "example_dutch": a short A2-level Dutch sentence using the word\n'
+    '5. "example_english": English translation of the sentence\n'
+    '6. "category": one of ["healthcare", "children", "tax", "government", '
+    '"society", "unemployment", "education", "country_knowledge", "daily_life"]\n'
+    '7. "difficulty": one of ["medium", "hard"]\n\n'
     "Requirements:\n"
     "- Exactly 200 entries\n"
     "- Exactly 50 verbs (25%)\n"
     "- Only MEDIUM or HARD difficulty (no easy)\n"
-    "- Focus on KNM exam language: society, rights, obligations, work, school, health, government, education, kids, rights, workplace\n"
+    "- Focus on KNM exam language: society, rights, obligations, work, school, health, "
+    "government, education, kids, rights, workplace\n"
     "- Use official names (e.g., Belastingdienst, UWV, DigiD, Tweede Kamer)\n"
     "- Use simple A2 Dutch in examples\n"
     "- Make examples realistic civic/municipal situations\n\n"
-
     "Return ONLY valid JSON. No markdown. No explanation.\n\n"
-
     "Example:\n"
     "[\n"
     "  {\n"
-    "    \"dutch\": \"aanvragen\",\n"
-    "    \"english\": \"to apply for\",\n"
-    "    \"type\": \"verb\",\n"
-    "    \"example_dutch\": \"Ik moet een paspoort aanvragen bij de gemeente.\",\n"
-    "    \"example_english\": \"I have to apply for a passport at the municipality.\",\n"
-    "    \"category\": \"government\",\n"
-    "    \"difficulty\": \"easy\"\n"
+    '    "dutch": "aanvragen",\n'
+    '    "english": "to apply for",\n'
+    '    "type": "verb",\n'
+    '    "example_dutch": "Ik moet een paspoort aanvragen bij de gemeente.",\n'
+    '    "example_english": "I have to apply for a passport at the municipality.",\n'
+    '    "category": "government",\n'
+    '    "difficulty": "easy"\n'
     "  }\n"
     "]"
 )
@@ -89,9 +86,13 @@ MESSAGES_PER_HOUR = 6
 ITEMS_PER_MESSAGE = 2
 REVISION_DELAY_HOURS = 3
 REVISION_CHANCE = 0.4
+VOCAB_WEIGHT = 0.7  # 70% vocab, 30% quiz
 
 KNM_PRIORITY_CATEGORIES = {
-    "healthcare", "government", "children", "country_knowledge",
+    "healthcare",
+    "government",
+    "children",
+    "country_knowledge",
 }
 KNM_PRIORITY_DIFFICULTIES = {"hard"}
 
@@ -107,8 +108,11 @@ class DutchTutor:
         self._whapi = whapi_client or WhapiClient()
         self._llm = llm or ChatGPTInterface()
         self._vocab_bank: list[dict[str, Any]] = []
+        self._quiz_bank: list[dict[str, Any]] = []
         self._sent_vocab_indices: set[int] = set()
+        self._sent_quiz_indices: set[int] = set()
         self._vocab_history: deque[tuple[int, float]] = deque(maxlen=200)
+        self._quiz_history: deque[tuple[int, float]] = deque(maxlen=200)
         self._timer_thread: threading.Thread | None = None
         self._running = False
         self._lock = threading.Lock()
@@ -122,7 +126,7 @@ class DutchTutor:
         if not os.path.exists(path):
             return None
         try:
-            with open(path, "r", encoding="utf-8") as f:
+            with open(path, encoding="utf-8") as f:
                 data = json.load(f)
             if isinstance(data, list) and len(data) > 0:
                 return data
@@ -217,25 +221,19 @@ class DutchTutor:
         with self._lock:
             self._generate_vocab_bank()
             self._sent_vocab_indices.clear()
-            return (
-                f"Vocab bank regenerated — {len(self._vocab_bank)} items."
-            )
+            return f"Vocab bank regenerated — {len(self._vocab_bank)} items."
 
     # ── Item selection ───────────────────────────────────────────────
 
-    def _pick_revision(
-        self, bank: list[dict[str, Any]], history: deque[tuple[int, float]]
-    ) -> dict[str, Any] | None:
+    def _pick_revision(self, bank: list[dict[str, Any]], history: deque[tuple[int, float]]) -> dict[str, Any] | None:
         now = time.time()
         cutoff = now - (REVISION_DELAY_HOURS * 3600)
-        eligible = [
-            idx for idx, sent_at in history
-            if sent_at <= cutoff and idx < len(bank)
-        ]
+        eligible = [idx for idx, sent_at in history if sent_at <= cutoff and idx < len(bank)]
         if not eligible:
             return None
         priority = [
-            idx for idx in eligible
+            idx
+            for idx in eligible
             if bank[idx].get("category") in KNM_PRIORITY_CATEGORIES
             or bank[idx].get("difficulty") in KNM_PRIORITY_DIFFICULTIES
         ]
@@ -243,9 +241,7 @@ class DutchTutor:
         return bank[random.choice(pool)]
 
     @staticmethod
-    def _pick_new(
-        bank: list[dict[str, Any]], sent: set[int]
-    ) -> tuple[dict[str, Any] | None, set[int]]:
+    def _pick_new(bank: list[dict[str, Any]], sent: set[int]) -> tuple[dict[str, Any] | None, set[int]]:
         if not bank:
             return None, sent
         available = [i for i in range(len(bank)) if i not in sent]
@@ -324,16 +320,12 @@ class DutchTutor:
                 return item, is_vocab, True
 
         if is_vocab:
-            item, self._sent_vocab_indices = self._pick_new(
-                self._vocab_bank, self._sent_vocab_indices
-            )
+            item, self._sent_vocab_indices = self._pick_new(self._vocab_bank, self._sent_vocab_indices)
             if item:
                 idx = self._vocab_bank.index(item)
                 self._vocab_history.append((idx, time.time()))
         else:
-            item, self._sent_quiz_indices = self._pick_new(
-                self._quiz_bank, self._sent_quiz_indices
-            )
+            item, self._sent_quiz_indices = self._pick_new(self._quiz_bank, self._sent_quiz_indices)
             if item:
                 idx = self._quiz_bank.index(item)
                 self._quiz_history.append((idx, time.time()))
@@ -375,9 +367,7 @@ class DutchTutor:
 
     def _schedule_loop(self) -> None:
         while self._running:
-            delays = sorted(
-                random.uniform(0, ONE_HOUR_SECONDS) for _ in range(MESSAGES_PER_HOUR)
-            )
+            delays = sorted(random.uniform(0, ONE_HOUR_SECONDS) for _ in range(MESSAGES_PER_HOUR))
             cycle_start = time.time()
             for delay in delays:
                 wait = cycle_start + delay - time.time()
@@ -416,7 +406,7 @@ class DutchTutor:
         lower = text.strip().lower()
         if not lower.startswith("dutch:"):
             return
-        instruction = text.strip()[len("dutch:"):].strip()
+        instruction = text.strip()[len("dutch:") :].strip()
         if not instruction:
             return
 
@@ -435,13 +425,14 @@ class DutchTutor:
             self.send_message()
             result = "Sent a message now!"
         elif cmd.startswith("update vocab "):
-            result = self._update_bank("vocab", instruction[len("update vocab "):])
+            result = self._update_bank("vocab", instruction[len("update vocab ") :])
         elif cmd.startswith("update quiz "):
-            result = self._update_bank("quiz", instruction[len("update quiz "):])
+            result = self._update_bank("quiz", instruction[len("update quiz ") :])
         else:
             result = self._update_bank("vocab", instruction)
 
         try:
-            self._whapi.send_text(to=self._chat_id, body=result)
+            if self._chat_id:
+                self._whapi.send_text(to=self._chat_id, body=result)
         except Exception as exc:
             logger.error("Failed to send response: %s", exc)

@@ -7,6 +7,7 @@ Usage:
 Example:
     python scripts/batch_process_chat.py 120363408154982447@g.us --count 500 --workers 5
 """
+
 from __future__ import annotations
 
 import argparse
@@ -51,7 +52,7 @@ logger = logging.getLogger(__name__)
 class BatchAnalyzer:
     """Collects and analyzes batch processing results (thread-safe)."""
 
-    def __init__(self):
+    def __init__(self) -> None:
         self._lock = threading.Lock()
         self.total_messages = 0
         self.text_messages = 0
@@ -107,11 +108,13 @@ class BatchAnalyzer:
 
             if isinstance(extracted, dict) and "error" in extracted:
                 self.error_counts["ExtractionError"] += 1
-                self.extraction_failures.append({
-                    "message": message[:200],
-                    "sender": sender,
-                    "error": extracted.get("error"),
-                })
+                self.extraction_failures.append(
+                    {
+                        "message": message[:200],
+                        "sender": sender,
+                        "error": extracted.get("error"),
+                    }
+                )
                 return
 
             entries = []
@@ -122,11 +125,13 @@ class BatchAnalyzer:
 
             if not entries:
                 self.error_counts["EmptyExtraction"] += 1
-                self.extraction_failures.append({
-                    "message": message[:200],
-                    "sender": sender,
-                    "error": "No entries extracted",
-                })
+                self.extraction_failures.append(
+                    {
+                        "message": message[:200],
+                        "sender": sender,
+                        "error": "No entries extracted",
+                    }
+                )
                 return
 
             for entry in entries:
@@ -219,9 +224,7 @@ class BatchAnalyzer:
                     "low_confidence": self.low_confidence_samples,
                     "extraction_failures": self.extraction_failures[:10],
                     "errors": self.errors[:10],
-                    "errors_by_confidence": {
-                        k: v[:5] for k, v in self.errors_by_confidence.items()
-                    },
+                    "errors_by_confidence": {k: v[:5] for k, v in self.errors_by_confidence.items()},
                 },
                 "generated_at": datetime.now().isoformat(),
             }
@@ -279,9 +282,9 @@ class BatchAnalyzer:
         print("\n" + "=" * 60)
 
 
-def fetch_all_messages(client: WhapiClient, chat_id: str, max_count: int = 500) -> list[dict]:
+def fetch_all_messages(client: WhapiClient, chat_id: str, max_count: int = 500) -> list[dict[str, Any]]:
     """Fetch messages from chat, paginating if needed."""
-    all_messages = []
+    all_messages: list[dict[str, Any]] = []
     offset = 0
     batch_size = 100
 
@@ -404,16 +407,14 @@ def process_single_message(
                     else:
                         analyzer.increment_sheet_write_errors()
                         if error:
-                            analyzer.record_post_extraction_error(
-                                text, sender_id, confidence, error, entry
-                            )
+                            analyzer.record_post_extraction_error(text, sender_id, confidence, error, entry)
 
         return (text, sender_id, extracted, None)
     except Exception as e:
         return (text, sender_id, None, e)
 
 
-def main():
+def main() -> None:
     parser = argparse.ArgumentParser(description="Batch process WhatsApp messages through SalesBot")
     parser.add_argument("chat_id", help="WhatsApp chat ID (e.g., 120363408154982447@g.us)")
     parser.add_argument("--count", type=int, default=100, help="Number of messages to fetch (default: 100)")
@@ -440,15 +441,14 @@ def main():
 
     # Filter to text messages only, exclude from_me
     text_messages = [
-        m for m in messages
-        if m.get("type") == "text" and not m.get("from_me") and m.get("text", {}).get("body")
+        m for m in messages if m.get("type") == "text" and not m.get("from_me") and m.get("text", {}).get("body")
     ]
     analyzer.text_messages = len(text_messages)
     logger.info(f"Found {len(text_messages)} text messages from others")
 
     # Apply limit if specified
     if args.limit and args.limit < len(text_messages):
-        text_messages = text_messages[:args.limit]
+        text_messages = text_messages[: args.limit]
         logger.info(f"Limited to {args.limit} messages for processing")
 
     if args.dry_run:
@@ -456,7 +456,7 @@ def main():
         for i, msg in enumerate(text_messages[:20]):
             sender = msg.get("from", "unknown")
             text = msg.get("text", {}).get("body", "")[:100]
-            print(f"{i+1}. [{sender}]: {text}...")
+            print(f"{i + 1}. [{sender}]: {text}...")
         if len(text_messages) > 20:
             print(f"\n... and {len(text_messages) - 20} more messages")
         return
