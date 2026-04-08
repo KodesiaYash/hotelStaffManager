@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import os
 import sys
+import threading
 import time
 import uuid
 from typing import Any
@@ -18,6 +19,9 @@ from communicationPlane.whatsappEngine.engine import WhatsAppEngine  # noqa: E40
 from communicationPlane.whatsappEngine.whapiInterface.webhook import (  # noqa: E402
     create_whapi_blueprint,
 )
+from controlplane.control.bot.salesbot.brain import (  # noqa: E402
+    process_expired_corrections,
+)
 from controlplane.control.control_plane_interface import (  # noqa: E402
     ControlPlaneInterface,
 )
@@ -26,6 +30,34 @@ from shared.logging_context import LogContext, init_logging  # noqa: E402
 
 init_logging()
 logger = logging.getLogger(__name__)
+
+# Background task interval for checking expired corrections (in seconds)
+EXPIRED_CORRECTION_CHECK_INTERVAL = int(os.getenv("EXPIRED_CORRECTION_CHECK_INTERVAL", "3600"))  # 1 hour
+
+
+def _run_expired_corrections_checker() -> None:
+    """Background thread to periodically check for expired corrections."""
+    logger.info(
+        "Starting expired corrections checker (interval=%ds)",
+        EXPIRED_CORRECTION_CHECK_INTERVAL,
+    )
+    while True:
+        try:
+            time.sleep(EXPIRED_CORRECTION_CHECK_INTERVAL)
+            escalated = process_expired_corrections()
+            if escalated > 0:
+                logger.info("Escalated %d expired corrections", escalated)
+        except Exception as exc:
+            logger.error("Error in expired corrections checker: %s", exc, exc_info=True)
+
+
+# Start background thread for expired corrections
+_expired_checker_thread = threading.Thread(
+    target=_run_expired_corrections_checker,
+    daemon=True,
+    name="ExpiredCorrectionsChecker",
+)
+_expired_checker_thread.start()
 
 app = Flask(__name__)
 control_plane = ControlPlaneInterface()
