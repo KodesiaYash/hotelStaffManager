@@ -196,7 +196,9 @@ def _send_correction_request(
         notification_client.send_text(to=chat_id, body=message, quoted=quoted_message_id)
         logger.info(
             "Sent correction request to chat_id=%s failures=%s quoted=%s",
-            chat_id, validation_failures, quoted_message_id,
+            chat_id,
+            validation_failures,
+            quoted_message_id,
         )
         return True
     except Exception as exc:
@@ -478,7 +480,8 @@ def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_
                 # Clear service suggestions and validation failures related to service
                 pending.service_suggestions = []
                 pending.validation_failures = [
-                    f for f in pending.validation_failures
+                    f
+                    for f in pending.validation_failures
                     if "service" not in f.lower() and "price list" not in f.lower()
                 ]
 
@@ -486,10 +489,7 @@ def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_
                 tracker.remove_pending(chat_id)
 
                 # Rebuild message with corrected service
-                combined_message = (
-                    f"{pending.original_message}\n\n"
-                    f"[CORRECTION: Service is '{selected_service}']"
-                )
+                combined_message = f"{pending.original_message}\n\n[CORRECTION: Service is '{selected_service}']"
                 process_message(combined_message, sender_id, chat_id=None)
                 return True
 
@@ -506,14 +506,12 @@ def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_
                 pending.extracted_data["Service"] = service_name
                 pending.service_suggestions = []
                 pending.validation_failures = [
-                    f for f in pending.validation_failures
+                    f
+                    for f in pending.validation_failures
                     if "service" not in f.lower() and "price list" not in f.lower()
                 ]
                 tracker.remove_pending(chat_id)
-                combined_message = (
-                    f"{pending.original_message}\n\n"
-                    f"[CORRECTION: Service is '{service_name}']"
-                )
+                combined_message = f"{pending.original_message}\n\n[CORRECTION: Service is '{service_name}']"
                 process_message(combined_message, sender_id, chat_id=None)
                 return True
 
@@ -537,7 +535,9 @@ def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_
             tracker.remove_pending(chat_id)
         else:
             _send_invalid_selection(
-                chat_id, reply_stripped, pending.service_suggestions,
+                chat_id,
+                reply_stripped,
+                pending.service_suggestions,
                 quoted_message_id=pending.original_message_id,
             )
         return True
@@ -1018,9 +1018,7 @@ def process_message(
 
         # Validate service against pricelist
         if service and chat_id:
-            is_valid_service, matched_service, suggestions = _get_sales_audit().validate_service(
-                str(service)
-            )
+            is_valid_service, matched_service, suggestions = _get_sales_audit().validate_service(str(service))
             if not is_valid_service:
                 if suggestions:
                     # Has suggestions - prompt user to choose

@@ -347,9 +347,7 @@ def _llm_match_service(service_value: str, records: list[dict[str, Any]], llm: L
     return canonical
 
 
-def find_nearest_services(
-    service_value: str, records: list[dict[str, Any]], top_n: int = 5
-) -> list[tuple[str, float]]:
+def find_nearest_services(service_value: str, records: list[dict[str, Any]], top_n: int = 5) -> list[tuple[str, float]]:
     """Find the nearest matching services using fuzzy matching.
 
     Returns:

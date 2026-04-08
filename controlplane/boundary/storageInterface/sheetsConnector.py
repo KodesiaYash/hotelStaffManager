@@ -124,9 +124,7 @@ class SheetsConnector:
         worksheet = self.get_worksheet(name)
         return worksheet.get_all_values()
 
-    def append_row(
-        self, name: str, row_values: Sequence[Any], max_retries: int = 5
-    ) -> None:
+    def append_row(self, name: str, row_values: Sequence[Any], max_retries: int = 5) -> None:
         worksheet = self.get_worksheet(name)
         for attempt in range(max_retries):
             try:
@@ -134,7 +132,7 @@ class SheetsConnector:
                 return
             except gspread.exceptions.APIError as e:
                 if e.response.status_code == 429:  # Rate limit exceeded
-                    wait_time = 2 ** attempt  # Exponential backoff: 1, 2, 4, 8, 16 seconds
+                    wait_time = 2**attempt  # Exponential backoff: 1, 2, 4, 8, 16 seconds
                     logger.warning(
                         "Sheets rate limit hit, retrying in %ds (attempt %d/%d)",
                         wait_time,
@@ -147,9 +145,7 @@ class SheetsConnector:
         # Final attempt without catching
         worksheet.append_row(list(row_values))
 
-    def update_cells(
-        self, name: str, cell_range: str, values: Sequence[Sequence[Any]], max_retries: int = 5
-    ) -> None:
+    def update_cells(self, name: str, cell_range: str, values: Sequence[Sequence[Any]], max_retries: int = 5) -> None:
         worksheet = self.get_worksheet(name)
         for attempt in range(max_retries):
             try:
@@ -157,7 +153,7 @@ class SheetsConnector:
                 return
             except gspread.exceptions.APIError as e:
                 if e.response.status_code == 429:  # Rate limit exceeded
-                    wait_time = 2 ** attempt
+                    wait_time = 2**attempt
                     logger.warning(
                         "Sheets rate limit hit, retrying in %ds (attempt %d/%d)",
                         wait_time,
