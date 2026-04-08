@@ -119,6 +119,30 @@ class SalesAudit:
         self.connector.append_row(self.details_key, row)
         return float(cost_price)
 
+    def validate_service(
+        self, service: str, threshold: float = 0.6
+    ) -> tuple[bool, str | None, list[tuple[str, float]]]:
+        """Validate if a service exists in the pricelist.
+
+        Args:
+            service: The service name to validate
+            threshold: Minimum similarity score for suggestions
+
+        Returns:
+            Tuple of (is_valid, matched_name, suggestions)
+            - is_valid: True if exact/substring match found
+            - matched_name: The matched service name if valid
+            - suggestions: List of (name, score) tuples if not valid
+        """
+        if not self.pricelist:
+            return True, service, []  # Can't validate without pricelist
+
+        records = self.pricelist.read_pricelist()
+        if not records:
+            return True, service, []  # Empty pricelist, allow anything
+
+        return service_exists_in_pricelist(service, records, threshold)
+
     def read_costs_sheet(self) -> list[dict[str, Any]]:
         if not self.pricelist:
             return []
@@ -321,6 +345,80 @@ def _llm_match_service(service_value: str, records: list[dict[str, Any]], llm: L
     if confidence == "low":
         return None
     return canonical
+
+
+def find_nearest_services(service_value: str, records: list[dict[str, Any]], top_n: int = 5) -> list[tuple[str, float]]:
+    """Find the nearest matching services using fuzzy matching.
+
+    Returns:
+        List of (service_name, similarity_score) tuples, sorted by score descending.
+    """
+    if not service_value or not records:
+        return []
+
+    service_lower = service_value.strip().lower()
+    candidates: list[tuple[str, float]] = []
+
+    for row in records:
+        row_service = _get_case_insensitive(row, ["service", "item", "name"])
+        if not row_service:
+            continue
+        row_service_str = str(row_service).strip()
+        row_service_lower = row_service_str.lower()
+
+        # Calculate similarity score
+        score = SequenceMatcher(None, service_lower, row_service_lower).ratio()
+        candidates.append((row_service_str, score))
+
+    # Sort by score descending and return top N
+    candidates.sort(key=lambda x: x[1], reverse=True)
+    return candidates[:top_n]
+
+
+def service_exists_in_pricelist(
+    service_value: str, records: list[dict[str, Any]], threshold: float = 0.6
+) -> tuple[bool, str | None, list[tuple[str, float]]]:
+    """Check if a service exists in the pricelist.
+
+    Args:
+        service_value: The service name to check
+        records: The pricelist records
+        threshold: Minimum similarity score for a "near match"
+
+    Returns:
+        Tuple of (exact_match_found, matched_service_name, nearest_matches)
+    """
+    if not service_value or not records:
+        return False, None, []
+
+    service_lower = service_value.strip().lower()
+
+    # First check for exact/substring match
+    for row in records:
+        row_service = _get_case_insensitive(row, ["service", "item", "name"])
+        if not row_service:
+            continue
+        row_service_str = str(row_service).strip()
+        row_service_lower = row_service_str.lower()
+
+        # Exact or substring match
+        if (
+            row_service_lower == service_lower
+            or service_lower in row_service_lower
+            or row_service_lower in service_lower
+        ):
+            return True, row_service_str, []
+
+    # No exact match, find nearest
+    nearest = find_nearest_services(service_value, records, top_n=5)
+
+    # Check if any are above threshold
+    good_matches = [(name, score) for name, score in nearest if score >= threshold]
+    if good_matches:
+        return False, None, good_matches
+
+    # No good matches at all
+    return False, None, nearest
 
 
 _default_audit: SalesAudit | None = None

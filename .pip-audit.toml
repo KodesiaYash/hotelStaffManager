@@ -1,0 +1,7 @@
+# pip-audit configuration
+# Ignore vulnerabilities in packages not directly used by this project
+# These are transitive dependencies from development tools (kimi-cli, etc.)
+
+[[tool.pip-audit.ignore-vulns]]
+id = "CVE-2026-1703"  # pip - will be upgraded separately
+reason = "System pip, not project dependency"

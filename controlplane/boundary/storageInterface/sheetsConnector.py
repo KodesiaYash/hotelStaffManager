@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
 import os
+import time
 from collections.abc import Sequence
 from typing import Any
 
 import gspread
 from google.oauth2.service_account import Credentials
+
+logger = logging.getLogger(__name__)
 
 DEFAULT_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 
@@ -120,10 +124,44 @@ class SheetsConnector:
         worksheet = self.get_worksheet(name)
         return worksheet.get_all_values()
 
-    def append_row(self, name: str, row_values: Sequence[Any]) -> None:
+    def append_row(self, name: str, row_values: Sequence[Any], max_retries: int = 5) -> None:
         worksheet = self.get_worksheet(name)
+        for attempt in range(max_retries):
+            try:
+                worksheet.append_row(list(row_values))
+                return
+            except gspread.exceptions.APIError as e:
+                if e.response.status_code == 429:  # Rate limit exceeded
+                    wait_time = 2**attempt  # Exponential backoff: 1, 2, 4, 8, 16 seconds
+                    logger.warning(
+                        "Sheets rate limit hit, retrying in %ds (attempt %d/%d)",
+                        wait_time,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    time.sleep(wait_time)
+                else:
+                    raise
+        # Final attempt without catching
         worksheet.append_row(list(row_values))
 
-    def update_cells(self, name: str, cell_range: str, values: Sequence[Sequence[Any]]) -> None:
+    def update_cells(self, name: str, cell_range: str, values: Sequence[Sequence[Any]], max_retries: int = 5) -> None:
         worksheet = self.get_worksheet(name)
+        for attempt in range(max_retries):
+            try:
+                worksheet.update(cell_range, list(values))
+                return
+            except gspread.exceptions.APIError as e:
+                if e.response.status_code == 429:  # Rate limit exceeded
+                    wait_time = 2**attempt
+                    logger.warning(
+                        "Sheets rate limit hit, retrying in %ds (attempt %d/%d)",
+                        wait_time,
+                        attempt + 1,
+                        max_retries,
+                    )
+                    time.sleep(wait_time)
+                else:
+                    raise
+        # Final attempt without catching
         worksheet.update(cell_range, list(values))

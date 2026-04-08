@@ -25,6 +25,16 @@ from controlplane.boundary.storageInterface.staffToHotelMapping import (  # noqa
     StaffToHotelMapping,
     normalize_phone,
 )
+from controlplane.control.bot.salesbot.correction_tracker import (  # noqa: E402
+    build_correction_prompt,
+    build_escalation_message,
+    build_final_escalation_message,
+    build_invalid_selection_message,
+    build_service_not_found_escalation,
+    build_service_suggestion_prompt,
+    build_timeout_escalation_message,
+    get_correction_tracker,
+)
 from controlplane.control.commissionService import (  # noqa: E402
     build_commission_notification,
     calculate_and_distribute_commissions,
@@ -37,6 +47,9 @@ from shared.logging_context import (  # noqa: E402
 )
 
 logger = logging.getLogger(__name__)
+
+# Alert number for escalations (QueryBot DM)
+ESCALATION_CHAT_ID = os.getenv("ESCALATION_CHAT_ID", "").strip()
 
 DEFAULT_PROMPT = (
     "Analyze this WhatsApp message for a sales lead. The service name may be mentioned "
@@ -166,6 +179,122 @@ def _get_notification_client() -> RetryingWhapiClient | None:
     return _notification_client
 
 
+def _send_correction_request(
+    chat_id: str,
+    validation_failures: list[str],
+    extracted_data: dict[str, Any],
+    quoted_message_id: str | None = None,
+) -> bool:
+    """Send a correction request to the user asking for missing/invalid fields."""
+    notification_client = _get_notification_client()
+    if notification_client is None:
+        logger.warning("Notification client not available; cannot send correction request")
+        return False
+
+    message = build_correction_prompt(validation_failures, extracted_data)
+    try:
+        notification_client.send_text(to=chat_id, body=message, quoted=quoted_message_id)
+        logger.info(
+            "Sent correction request to chat_id=%s failures=%s quoted=%s",
+            chat_id,
+            validation_failures,
+            quoted_message_id,
+        )
+        return True
+    except Exception as exc:
+        logger.error("Failed to send correction request: %s", exc, exc_info=True)
+        return False
+
+
+def _send_escalation(
+    chat_id: str,
+    sender_id: str | None,
+    original_message: str,
+    validation_failures: list[str],
+) -> bool:
+    """Escalate to the alert number when corrections fail repeatedly."""
+    if not ESCALATION_CHAT_ID:
+        logger.warning("ESCALATION_CHAT_ID not set; cannot escalate")
+        return False
+
+    notification_client = _get_notification_client()
+    if notification_client is None:
+        logger.warning("Notification client not available; cannot escalate")
+        return False
+
+    message = build_escalation_message(original_message, validation_failures, sender_id, chat_id)
+    try:
+        notification_client.send_text(to=ESCALATION_CHAT_ID, body=message)
+        logger.info(
+            "Escalated validation failure to %s for chat_id=%s",
+            ESCALATION_CHAT_ID,
+            chat_id,
+        )
+        return True
+    except Exception as exc:
+        logger.error("Failed to send escalation: %s", exc, exc_info=True)
+        return False
+
+
+def _send_service_suggestions(
+    chat_id: str,
+    service_name: str,
+    suggestions: list[tuple[str, float]],
+    quoted_message_id: str | None = None,
+) -> bool:
+    """Send service suggestions to the user when service not found in pricelist."""
+    notification_client = _get_notification_client()
+    if notification_client is None:
+        logger.warning("Notification client not available; cannot send service suggestions")
+        return False
+
+    message = build_service_suggestion_prompt(service_name, suggestions)
+    try:
+        notification_client.send_text(to=chat_id, body=message, quoted=quoted_message_id)
+        logger.info(
+            "Sent service suggestions to chat_id=%s for service=%s suggestions=%d quoted=%s",
+            chat_id,
+            service_name,
+            len(suggestions),
+            quoted_message_id,
+        )
+        return True
+    except Exception as exc:
+        logger.error("Failed to send service suggestions: %s", exc, exc_info=True)
+        return False
+
+
+def _escalate_unknown_service(
+    chat_id: str,
+    sender_id: str | None,
+    service_name: str,
+    original_message: str,
+) -> bool:
+    """Escalate when a service is not found in pricelist and no good suggestions exist."""
+    if not ESCALATION_CHAT_ID:
+        logger.warning("ESCALATION_CHAT_ID not set; cannot escalate unknown service")
+        return False
+
+    notification_client = _get_notification_client()
+    if notification_client is None:
+        logger.warning("Notification client not available; cannot escalate")
+        return False
+
+    message = build_service_not_found_escalation(service_name, original_message, sender_id, chat_id)
+    try:
+        notification_client.send_text(to=ESCALATION_CHAT_ID, body=message)
+        logger.info(
+            "Escalated unknown service to %s service=%s chat_id=%s",
+            ESCALATION_CHAT_ID,
+            service_name,
+            chat_id,
+        )
+        return True
+    except Exception as exc:
+        logger.error("Failed to escalate unknown service: %s", exc, exc_info=True)
+        return False
+
+
 def _send_commission_notification(
     seller_name: str,
     service: str,
@@ -192,6 +321,284 @@ def _send_commission_notification(
         logger.info("Commission notification sent to sales_group=%s", sales_group_id)
     except Exception as exc:
         logger.error("Failed to send commission notification: %s", exc, exc_info=True)
+
+
+def _send_invalid_selection(
+    chat_id: str,
+    reply: str,
+    suggestions: list[tuple[str, float]],
+    quoted_message_id: str | None = None,
+) -> bool:
+    """Send invalid selection message to user."""
+    notification_client = _get_notification_client()
+    if notification_client is None:
+        logger.warning("Notification client not available; cannot send invalid selection message")
+        return False
+
+    message = build_invalid_selection_message(reply, suggestions)
+    try:
+        notification_client.send_text(to=chat_id, body=message, quoted=quoted_message_id)
+        logger.info("Sent invalid selection message to chat_id=%s reply=%s", chat_id, reply)
+        return True
+    except Exception as exc:
+        logger.error("Failed to send invalid selection message: %s", exc, exc_info=True)
+        return False
+
+
+def _send_final_escalation(
+    chat_id: str,
+    sender_id: str | None,
+    original_message: str,
+) -> bool:
+    """Send final escalation - tell user to contact Omar and alert admin."""
+    notification_client = _get_notification_client()
+    if notification_client is None:
+        logger.warning("Notification client not available; cannot send final escalation")
+        return False
+
+    # Send message to user telling them to contact Omar
+    user_message = build_final_escalation_message()
+    try:
+        notification_client.send_text(to=chat_id, body=user_message)
+        logger.info("Sent final escalation message to user chat_id=%s", chat_id)
+    except Exception as exc:
+        logger.error("Failed to send final escalation to user: %s", exc, exc_info=True)
+
+    # Also alert admin via ESCALATION_CHAT_ID
+    if ESCALATION_CHAT_ID:
+        admin_message = (
+            "🚨 *SalesBot Escalation - Repeated Invalid Input*\n\n"
+            f"*Chat ID:* `{chat_id}`\n"
+            f"*Sender:* `{sender_id or 'Unknown'}`\n\n"
+            "*Original Message:*\n"
+            f"```\n{original_message[:500]}\n```\n\n"
+            "_User failed to provide valid input after multiple attempts._"
+        )
+        try:
+            notification_client.send_text(to=ESCALATION_CHAT_ID, body=admin_message)
+            logger.info("Sent final escalation to admin %s", ESCALATION_CHAT_ID)
+        except Exception as exc:
+            logger.error("Failed to send final escalation to admin: %s", exc, exc_info=True)
+
+    return True
+
+
+def process_expired_corrections() -> int:
+    """Check for expired corrections (24h timeout) and escalate them.
+
+    This should be called periodically (e.g., every hour) to catch
+    corrections where the user never replied.
+
+    Returns:
+        Number of expired corrections escalated
+    """
+    tracker = get_correction_tracker()
+    expired = tracker.get_and_remove_expired()
+
+    if not expired:
+        return 0
+
+    notification_client = _get_notification_client()
+    if notification_client is None:
+        logger.warning("Notification client not available; cannot escalate expired corrections")
+        return 0
+
+    escalated = 0
+    for correction in expired:
+        logger.warning(
+            "Escalating expired correction (24h timeout) chat_id=%s sender_id=%s",
+            correction.chat_id,
+            correction.sender_id,
+        )
+
+        # Send timeout message to user
+        try:
+            user_message = build_final_escalation_message()
+            notification_client.send_text(to=correction.chat_id, body=user_message)
+        except Exception as exc:
+            logger.error("Failed to send timeout message to user: %s", exc, exc_info=True)
+
+        # Escalate to admin
+        if ESCALATION_CHAT_ID:
+            try:
+                admin_message = build_timeout_escalation_message(
+                    correction.original_message,
+                    correction.validation_failures,
+                    correction.sender_id,
+                    correction.chat_id,
+                )
+                notification_client.send_text(to=ESCALATION_CHAT_ID, body=admin_message)
+                logger.info(
+                    "Escalated expired correction to admin %s chat_id=%s",
+                    ESCALATION_CHAT_ID,
+                    correction.chat_id,
+                )
+                escalated += 1
+            except Exception as exc:
+                logger.error("Failed to escalate expired correction: %s", exc, exc_info=True)
+
+    return escalated
+
+
+def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_id: str) -> bool:
+    """Check if this message is a reply to a correction request.
+
+    If there's a pending correction for this chat, merge the new message
+    with the original and reprocess.
+
+    Returns:
+        True if this was handled as a correction reply, False otherwise
+    """
+    tracker = get_correction_tracker()
+    pending = tracker.get_pending(chat_id)
+
+    if not pending:
+        return False
+
+    logger.info(
+        "Found pending correction for chat_id=%s, merging with reply",
+        chat_id,
+    )
+
+    # Check if this is a reply to service suggestions
+    if pending.service_suggestions:
+        reply_stripped = message.strip()
+
+        # Check if it's a valid number selection
+        if reply_stripped.isdigit():
+            selected_service = pending.get_selected_service(reply_stripped)
+            if selected_service:
+                # Valid selection - replace service in extracted data and reprocess
+                logger.info(
+                    "User selected service #%s: %s chat_id=%s",
+                    reply_stripped,
+                    selected_service,
+                    chat_id,
+                )
+                # Update extracted data with selected service
+                pending.extracted_data["Service"] = selected_service
+                # Clear service suggestions and validation failures related to service
+                pending.service_suggestions = []
+                pending.validation_failures = [
+                    f
+                    for f in pending.validation_failures
+                    if "service" not in f.lower() and "price list" not in f.lower()
+                ]
+
+                # Remove pending and reprocess with corrected service
+                tracker.remove_pending(chat_id)
+
+                # Rebuild message with corrected service
+                combined_message = f"{pending.original_message}\n\n[CORRECTION: Service is '{selected_service}']"
+                process_message(combined_message, sender_id, chat_id=None)
+                return True
+
+        # Check if reply matches one of the suggested service names (case-insensitive)
+        reply_lower = reply_stripped.lower()
+        for service_name, _ in pending.service_suggestions:
+            if reply_lower == service_name.lower():
+                # User typed the exact service name
+                logger.info(
+                    "User typed service name: %s chat_id=%s",
+                    service_name,
+                    chat_id,
+                )
+                pending.extracted_data["Service"] = service_name
+                pending.service_suggestions = []
+                pending.validation_failures = [
+                    f
+                    for f in pending.validation_failures
+                    if "service" not in f.lower() and "price list" not in f.lower()
+                ]
+                tracker.remove_pending(chat_id)
+                combined_message = f"{pending.original_message}\n\n[CORRECTION: Service is '{service_name}']"
+                process_message(combined_message, sender_id, chat_id=None)
+                return True
+
+        # Invalid reply (random word like "xyzqwer" or invalid number like "6")
+        pending.attempt_count += 1
+        logger.warning(
+            "Invalid service reply '%s' chat_id=%s attempt=%d",
+            reply_stripped[:50],
+            chat_id,
+            pending.attempt_count,
+        )
+
+        if pending.should_escalate():
+            # Too many failed attempts - escalate and tell user to contact Omar
+            logger.warning(
+                "Escalating after %d failed selection attempts chat_id=%s",
+                pending.attempt_count,
+                chat_id,
+            )
+            _send_final_escalation(chat_id, sender_id, pending.original_message)
+            tracker.remove_pending(chat_id)
+        else:
+            _send_invalid_selection(
+                chat_id,
+                reply_stripped,
+                pending.service_suggestions,
+                quoted_message_id=pending.original_message_id,
+            )
+        return True
+
+    # Combine original message with correction reply for re-extraction
+    combined_message = f"{pending.original_message}\n\n[CORRECTION from user]:\n{message}"
+
+    # Re-extract with combined context
+    extracted = llm_extract(combined_message)
+
+    if isinstance(extracted, dict) and "error" in extracted:
+        logger.warning("Correction re-extraction failed: %s", extracted.get("error"))
+        # Keep pending, user can try again
+        return True
+
+    # Validate the new extraction
+    entries: list[dict[str, Any]] = []
+    if isinstance(extracted, list):
+        entries = [e for e in extracted if isinstance(e, dict)]
+    elif isinstance(extracted, dict):
+        entries = [extracted]
+
+    if not entries:
+        logger.warning("Correction re-extraction returned no entries")
+        return True
+
+    # Check if validation passes now
+    entry = entries[0]  # Take first entry
+    is_valid, validation_failures = _validate_extracted_data(entry)
+
+    if not is_valid:
+        # Still failing, update pending and send another correction request
+        pending = tracker.add_pending(
+            chat_id=chat_id,
+            sender_id=sender_id,
+            original_message=combined_message,
+            extracted_data=entry,
+            validation_failures=validation_failures,
+            original_message_id=pending.original_message_id,
+        )
+
+        if pending.should_escalate():
+            logger.warning(
+                "Escalating after %d failed correction attempts chat_id=%s",
+                pending.attempt_count,
+                chat_id,
+            )
+            _send_escalation(chat_id, sender_id, pending.original_message, validation_failures)
+            tracker.remove_pending(chat_id)
+        else:
+            _send_correction_request(chat_id, validation_failures, entry, quoted_message_id=pending.original_message_id)
+        return True
+
+    # Validation passed! Remove pending and process normally
+    tracker.remove_pending(chat_id)
+    logger.info("Correction successful, processing entry chat_id=%s", chat_id)
+
+    # Process the corrected entry (call process_message with the combined message)
+    # Set chat_id to None to avoid re-triggering correction flow
+    process_message(combined_message, sender_id, chat_id=None)
+    return True
 
 
 def llm_extract(message: str) -> dict[str, Any] | list[dict[str, Any]]:
@@ -399,8 +806,92 @@ def _resolve_staff_and_hotel(
     return staff_name, extracted_hotel, True
 
 
-def process_message(message: str, sender_id: str | None = None) -> None:
-    logger.debug("SalesBot processing message length=%d sender_id=%s", len(message), sender_id)
+def _is_sales_message(message: str) -> bool:
+    """Check if a message looks like a sales message.
+
+    Sales messages typically:
+    1. Contain 'Riad Roxanne' or 'Riad Persephone', OR
+    2. Have a sales-like structure with fields like Service:, Date:, Time:, Room:, Guest:
+    """
+    if not message:
+        return False
+
+    message_lower = message.lower()
+
+    # Check for Riad identifiers (case-insensitive)
+    riad_identifiers = [
+        "riad roxanne",
+        "riad persephone",
+        "roxanne",
+        "persephone",
+    ]
+
+    if any(identifier in message_lower for identifier in riad_identifiers):
+        return True
+
+    # Check for sales-like structure - look for common field patterns
+    sales_field_patterns = [
+        "service:",
+        "service :",
+        "date:",
+        "date :",
+        "time:",
+        "time :",
+        "room:",
+        "room :",
+        "guest:",
+        "guest :",
+        "quantity:",
+        "quantity :",
+        "qty:",
+        "qty :",
+    ]
+
+    # Count how many sales field patterns are present
+    field_count = sum(1 for pattern in sales_field_patterns if pattern in message_lower)
+
+    # If message has 3+ sales-like fields, treat it as a sales message
+    # (e.g., Service + Date + Time, or Service + Room + Guest)
+    return field_count >= 3
+
+
+def process_message(
+    message: str,
+    sender_id: str | None = None,
+    chat_id: str | None = None,
+    message_id: str | None = None,
+) -> None:
+    """Process a sales message, with optional correction flow.
+
+    Args:
+        message: The message text to process
+        sender_id: The sender's phone number/ID
+        chat_id: The chat ID (needed for correction requests)
+        message_id: The original message ID (for quoted replies)
+    """
+    logger.debug(
+        "SalesBot processing message length=%d sender_id=%s chat_id=%s message_id=%s",
+        len(message),
+        sender_id,
+        chat_id,
+        message_id,
+    )
+
+    # Check if this is a reply to a pending correction request
+    if chat_id and check_and_handle_correction_reply(message, sender_id, chat_id):
+        logger.info("Message handled as correction reply chat_id=%s", chat_id)
+        return
+
+    # Check if message looks like a sales message
+    if not _is_sales_message(message):
+        logger.info(
+            "Ignoring non-sales message length=%d sender_id=%s message_preview=%s",
+            len(message),
+            sender_id,
+            message[:100].replace("\n", " "),
+        )
+        return
+
     extracted = llm_extract(message)
     if isinstance(extracted, dict) and "error" in extracted:
         logger.error(
@@ -462,6 +953,31 @@ def process_message(message: str, sender_id: str | None = None) -> None:
                 }
             )
             logger.info("SalesBot confidence=%s skipping sheet write", confidence or "unknown")
+
+            # Trigger correction flow if we have validation failures and chat_id
+            if validation_failures and chat_id:
+                tracker = get_correction_tracker()
+                pending = tracker.add_pending(
+                    chat_id=chat_id,
+                    sender_id=sender_id,
+                    original_message=message,
+                    extracted_data=entry,
+                    validation_failures=validation_failures,
+                    original_message_id=message_id,
+                )
+
+                if pending.should_escalate():
+                    # Too many failed attempts, escalate
+                    logger.warning(
+                        "Escalating after %d failed correction attempts chat_id=%s",
+                        pending.attempt_count,
+                        chat_id,
+                    )
+                    _send_escalation(chat_id, sender_id, message, validation_failures)
+                    tracker.remove_pending(chat_id)
+                else:
+                    # Send correction request to user (as reply to original message)
+                    _send_correction_request(chat_id, validation_failures, entry, quoted_message_id=message_id)
             continue
         if confidence == "medium":
             log_medium_confidence(
@@ -499,9 +1015,62 @@ def process_message(message: str, sender_id: str | None = None) -> None:
             quantity = 1
         quantity_value = _coerce_quantity(quantity)
         quantity_row: Any = int(quantity_value) if quantity_value.is_integer() else quantity_value
+
+        # Validate service against pricelist
+        if service and chat_id:
+            is_valid_service, matched_service, suggestions = _get_sales_audit().validate_service(str(service))
+            if not is_valid_service:
+                if suggestions:
+                    # Has suggestions - prompt user to choose
+                    logger.warning(
+                        "Service '%s' not found in pricelist, sending suggestions chat_id=%s",
+                        service,
+                        chat_id,
+                    )
+                    _send_service_suggestions(chat_id, str(service), suggestions, quoted_message_id=message_id)
+
+                    # Track as pending correction with service-specific failure and suggestions
+                    tracker = get_correction_tracker()
+                    tracker.add_pending(
+                        chat_id=chat_id,
+                        sender_id=sender_id,
+                        original_message=message,
+                        extracted_data=entry,
+                        validation_failures=[f"Service '{service}' not found in price list"],
+                        service_suggestions=suggestions,
+                        original_message_id=message_id,
+                    )
+                    continue
+                else:
+                    # No suggestions - escalate to QueryBot
+                    logger.warning(
+                        "Service '%s' not found and no suggestions, escalating chat_id=%s",
+                        service,
+                        chat_id,
+                    )
+                    _escalate_unknown_service(chat_id, sender_id, str(service), message)
+                    continue
+            elif matched_service:
+                # Use the matched service name from pricelist
+                service = matched_service
+                logger.debug("Service matched to pricelist: %s", service)
         # Get selling price and cost price from Pricing_Sales sheet
         selling_price = _get_sales_audit().get_selling_price(service, quantity_value, llm=_get_llm_interface())
         cost_price = _get_sales_audit().calculate_cost(service, quantity_value, llm=_get_llm_interface())
+
+        # Never write entry with 0 selling or cost price - escalate instead
+        if selling_price <= 0 or cost_price <= 0:
+            logger.warning(
+                "Skipping entry with zero price: service=%s selling_price=%s cost_price=%s chat_id=%s",
+                service,
+                selling_price,
+                cost_price,
+                chat_id,
+            )
+            if chat_id:
+                # Alert admin about zero price issue
+                _escalate_unknown_service(chat_id, sender_id, str(service), message)
+            continue
 
         # Generate unique sale ID for commission tracking
         sale_id = generate_sale_id()
