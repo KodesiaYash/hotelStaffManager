@@ -448,7 +448,7 @@ def check_and_handle_correction_reply(
             reply_lower = reply_stripped.lower()
             if reply_lower in ["yes", "y", "confirm", "correct", "ok"]:
                 # User confirmed - process with the selected service
-                selected_service = pending.awaiting_service_confirmation
+                selected_service: str | None = pending.awaiting_service_confirmation
                 logger.info(
                     "User confirmed service: %s chat_id=%s",
                     selected_service,
@@ -487,8 +487,7 @@ def check_and_handle_correction_reply(
                     notification_client = _get_notification_client()
                     if notification_client:
                         user_message = (
-                            "❌ *Your original entry will not be processed.*\n\n"
-                            "Please contact *Omar* for assistance."
+                            "❌ *Your original entry will not be processed.*\n\nPlease contact *Omar* for assistance."
                         )
                         try:
                             notification_client.send_text(
@@ -523,8 +522,7 @@ def check_and_handle_correction_reply(
                 notification_client = _get_notification_client()
                 if notification_client:
                     error_message = (
-                        "❌ *Please reply with 'yes' or 'no'*\n\n"
-                        f"To confirm: *{pending.awaiting_service_confirmation}*"
+                        f"❌ *Please reply with 'yes' or 'no'*\n\nTo confirm: *{pending.awaiting_service_confirmation}*"
                     )
                     try:
                         notification_client.send_text(
@@ -538,7 +536,7 @@ def check_and_handle_correction_reply(
 
         # Check if it's a valid number selection
         if reply_stripped.isdigit():
-            selected_service: str | None = pending.get_selected_service(reply_stripped)
+            selected_service = pending.get_selected_service(reply_stripped)
             if selected_service:
                 # Valid selection - send confirmation message
                 logger.info(

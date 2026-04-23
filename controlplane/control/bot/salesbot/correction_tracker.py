@@ -248,9 +248,7 @@ def build_service_suggestion_prompt(
 def build_service_confirmation_message(service_name: str) -> str:
     """Build a message to confirm the selected service."""
     return (
-        f"✅ *You selected: {service_name}*\n\n"
-        "*Is this correct?*\n"
-        "Reply *'yes'* to confirm or *'no'* to choose again."
+        f"✅ *You selected: {service_name}*\n\n*Is this correct?*\nReply *'yes'* to confirm or *'no'* to choose again."
     )
 
 

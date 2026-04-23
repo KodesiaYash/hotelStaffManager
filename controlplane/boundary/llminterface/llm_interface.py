@@ -82,8 +82,10 @@ def get_query_bot_llm(provider: str | None = None) -> LLMInterface:
     A single provider name (no comma) returns that provider directly.
     """
     raw = (
-        provider or os.getenv("QUERYBOT_LLM_PROVIDER") or os.getenv("SALES_BOT_LLM_PROVIDER") or "gemini"
-    ).strip().lower()
+        (provider or os.getenv("QUERYBOT_LLM_PROVIDER") or os.getenv("SALES_BOT_LLM_PROVIDER") or "gemini")
+        .strip()
+        .lower()
+    )
     names = [n.strip() for n in raw.split(",") if n.strip()]
 
     if len(names) == 1:
