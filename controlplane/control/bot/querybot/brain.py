@@ -102,22 +102,20 @@ def _trim_records(records: list[dict[str, Any]], *, max_rows: int) -> list[dict[
 
 
 def build_spreadsheet_context() -> dict[str, Any]:
-    details_rows = _trim_records(
-        _get_sales_audit().read_details_sheet(),
-        max_rows=_get_max_rows("QUERYBOT_MAX_DETAILS_ROWS", 200),
-    )
+    # Read all sales audit rows (unbounded)
+    details_rows = _get_sales_audit().read_details_sheet()
     context: dict[str, Any] = {
         "sales_audit_rows": details_rows,
         "sales_audit_row_count": len(details_rows),
     }
 
-    # Add sale commissions data
+    # Add sale commissions data (limited to last 50 rows)
     commissions_client = _get_sale_commissions()
     if commissions_client is not None:
         try:
             commissions_rows = _trim_records(
                 commissions_client.read_commissions(),
-                max_rows=_get_max_rows("QUERYBOT_MAX_COMMISSIONS_ROWS", 500),
+                max_rows=_get_max_rows("QUERYBOT_MAX_COMMISSIONS_ROWS", 50),
             )
             context["sale_commissions_rows"] = commissions_rows
             context["sale_commissions_row_count"] = len(commissions_rows)
