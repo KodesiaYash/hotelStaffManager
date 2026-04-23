@@ -601,16 +601,27 @@ def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_
     return True
 
 
+def _get_llm_provider_name() -> str:
+    """Get the name of the current LLM provider for logging."""
+    llm = _get_llm_interface()
+    return type(llm).__name__
+
+
 def llm_extract(message: str) -> dict[str, Any] | list[dict[str, Any]]:
     """LLM extracts structured data from message using configured provider."""
     prompt = DEFAULT_PROMPT.replace("__MESSAGE__", message)
+    provider_name = _get_llm_provider_name()
 
-    logger.debug("SalesBot LLM extract prompt length=%d", len(prompt))
+    logger.debug("SalesBot LLM extract prompt length=%d provider=%s", len(prompt), provider_name)
     try:
         response_text = _get_llm_interface().generate(prompt)
     except Exception as exc:
+        exc_str = str(exc).lower()
+        is_quota_error = "429" in exc_str or "quota" in exc_str or "rate" in exc_str
         logger.error(
-            "SalesBot LLM call failed error=%s message_preview=%s",
+            "SalesBot LLM call failed provider=%s quota_exhausted=%s error=%s message_preview=%s",
+            provider_name,
+            is_quota_error,
             str(exc)[:100],
             message[:200],
         )
@@ -626,8 +637,12 @@ def llm_extract(message: str) -> dict[str, Any] | list[dict[str, Any]]:
         try:
             response_text = _get_llm_interface().generate(prompt)
         except Exception as exc:
+            exc_str = str(exc).lower()
+            is_quota_error = "429" in exc_str or "quota" in exc_str or "rate" in exc_str
             logger.error(
-                "SalesBot LLM retry call failed error=%s message_preview=%s",
+                "SalesBot LLM retry call failed provider=%s quota_exhausted=%s error=%s message_preview=%s",
+                provider_name,
+                is_quota_error,
                 str(exc)[:100],
                 message[:200],
             )
