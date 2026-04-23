@@ -40,6 +40,8 @@ class PendingCorrection:
     service_suggestions: list[tuple[str, float]] = field(default_factory=list)
     # Original message ID for quoted replies
     original_message_id: str | None = None
+    # Awaiting confirmation for selected service
+    awaiting_service_confirmation: str | None = None
 
     def is_expired(self) -> bool:
         return time.time() - self.created_at > CORRECTION_EXPIRY_SECONDS
@@ -241,6 +243,15 @@ def build_service_suggestion_prompt(
     lines.append(f"\n*Please reply with the correct service name or number (1-{max_num}).*")
 
     return "\n".join(lines)
+
+
+def build_service_confirmation_message(service_name: str) -> str:
+    """Build a message to confirm the selected service."""
+    return (
+        f"✅ *You selected: {service_name}*\n\n"
+        "*Is this correct?*\n"
+        "Reply *'yes'* to confirm or *'no'* to choose again."
+    )
 
 
 def build_invalid_selection_message(

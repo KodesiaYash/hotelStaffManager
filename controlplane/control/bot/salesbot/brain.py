@@ -30,6 +30,7 @@ from controlplane.control.bot.salesbot.correction_tracker import (  # noqa: E402
     build_escalation_message,
     build_final_escalation_message,
     build_invalid_selection_message,
+    build_service_confirmation_message,
     build_service_not_found_escalation,
     build_service_suggestion_prompt,
     build_timeout_escalation_message,
@@ -442,55 +443,111 @@ def check_and_handle_correction_reply(
     if pending.service_suggestions:
         reply_stripped = message.strip()
 
-        # Check if it's a valid number selection
-        if reply_stripped.isdigit():
-            selected_service = pending.get_selected_service(reply_stripped)
-            if selected_service:
-                # Valid selection - replace service in extracted data and reprocess
+        # Check if we're awaiting confirmation for a previously selected service
+        if pending.awaiting_service_confirmation:
+            reply_lower = reply_stripped.lower()
+            if reply_lower in ["yes", "y", "confirm", "correct", "ok"]:
+                # User confirmed - process with the selected service
+                selected_service = pending.awaiting_service_confirmation
                 logger.info(
-                    "User selected service #%s: %s chat_id=%s",
-                    reply_stripped,
+                    "User confirmed service: %s chat_id=%s",
                     selected_service,
                     chat_id,
                 )
-                # Update extracted data with selected service
                 pending.extracted_data["Service"] = selected_service
-                # Clear service suggestions and validation failures related to service
                 pending.service_suggestions = []
+                pending.awaiting_service_confirmation = None
                 pending.validation_failures = [
                     f
                     for f in pending.validation_failures
                     if "service" not in f.lower() and "price list" not in f.lower()
                 ]
-
-                # Remove pending and reprocess with corrected service
                 tracker.remove_pending(chat_id)
-
-                # Rebuild message with corrected service
                 combined_message = f"{pending.original_message}\n\n[CORRECTION: Service is '{selected_service}']"
                 process_message(combined_message, sender_id, chat_id=None)
+                return True
+            elif reply_lower in ["no", "n", "cancel", "wrong"]:
+                # User rejected - resend suggestions
+                logger.info(
+                    "User rejected service selection, resending suggestions chat_id=%s",
+                    chat_id,
+                )
+                pending.awaiting_service_confirmation = None
+                _send_service_suggestions(
+                    chat_id,
+                    pending.extracted_data.get("Service", ""),
+                    pending.service_suggestions,
+                    quoted_message_id=pending.original_message_id,
+                )
+                return True
+            else:
+                # Invalid response to confirmation
+                notification_client = _get_notification_client()
+                if notification_client:
+                    error_message = (
+                        "❌ *Please reply with 'yes' or 'no'*\n\n"
+                        f"To confirm: *{pending.awaiting_service_confirmation}*"
+                    )
+                    try:
+                        notification_client.send_text(
+                            to=chat_id,
+                            body=error_message,
+                            quoted=pending.original_message_id,
+                        )
+                    except Exception as exc:
+                        logger.error("Failed to send confirmation error: %s", exc)
+                return True
+
+        # Check if it's a valid number selection
+        if reply_stripped.isdigit():
+            selected_service = pending.get_selected_service(reply_stripped)
+            if selected_service:
+                # Valid selection - send confirmation message
+                logger.info(
+                    "User selected service #%s: %s, awaiting confirmation chat_id=%s",
+                    reply_stripped,
+                    selected_service,
+                    chat_id,
+                )
+                pending.awaiting_service_confirmation = selected_service
+
+                # Send confirmation message
+                notification_client = _get_notification_client()
+                if notification_client:
+                    confirmation_message = build_service_confirmation_message(selected_service)
+                    try:
+                        notification_client.send_text(
+                            to=chat_id,
+                            body=confirmation_message,
+                            quoted=pending.original_message_id,
+                        )
+                    except Exception as exc:
+                        logger.error("Failed to send confirmation: %s", exc)
                 return True
 
         # Check if reply matches one of the suggested service names (case-insensitive)
         reply_lower = reply_stripped.lower()
         for service_name, _ in pending.service_suggestions:
             if reply_lower == service_name.lower():
-                # User typed the exact service name
+                # User typed the exact service name - send confirmation
                 logger.info(
-                    "User typed service name: %s chat_id=%s",
+                    "User typed service name: %s, awaiting confirmation chat_id=%s",
                     service_name,
                     chat_id,
                 )
-                pending.extracted_data["Service"] = service_name
-                pending.service_suggestions = []
-                pending.validation_failures = [
-                    f
-                    for f in pending.validation_failures
-                    if "service" not in f.lower() and "price list" not in f.lower()
-                ]
-                tracker.remove_pending(chat_id)
-                combined_message = f"{pending.original_message}\n\n[CORRECTION: Service is '{service_name}']"
-                process_message(combined_message, sender_id, chat_id=None)
+                pending.awaiting_service_confirmation = service_name
+
+                notification_client = _get_notification_client()
+                if notification_client:
+                    confirmation_message = build_service_confirmation_message(service_name)
+                    try:
+                        notification_client.send_text(
+                            to=chat_id,
+                            body=confirmation_message,
+                            quoted=pending.original_message_id,
+                        )
+                    except Exception as exc:
+                        logger.error("Failed to send confirmation: %s", exc)
                 return True
 
         # Invalid reply (random word like "xyzqwer" or invalid number like "6")
