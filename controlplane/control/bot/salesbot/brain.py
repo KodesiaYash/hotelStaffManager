@@ -442,13 +442,14 @@ def check_and_handle_correction_reply(
     # Check if this is a reply to service suggestions
     if pending.service_suggestions:
         reply_stripped = message.strip()
+        selected_service: str | None = None
 
         # Check if we're awaiting confirmation for a previously selected service
         if pending.awaiting_service_confirmation:
             reply_lower = reply_stripped.lower()
             if reply_lower in ["yes", "y", "confirm", "correct", "ok"]:
                 # User confirmed - process with the selected service
-                selected_service: str | None = pending.awaiting_service_confirmation
+                selected_service = pending.awaiting_service_confirmation
                 logger.info(
                     "User confirmed service: %s chat_id=%s",
                     selected_service,
