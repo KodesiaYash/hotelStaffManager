@@ -178,6 +178,7 @@ class SalesAudit:
             _get_case_insensitive(
                 direct_match,
                 [
+                    "Cost Price (DH)",
                     "Cost Price(MAD)",
                     "cost_price",
                     "cost price",
