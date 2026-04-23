@@ -467,11 +467,49 @@ def check_and_handle_correction_reply(
                 process_message(combined_message, sender_id, chat_id=None)
                 return True
             elif reply_lower in ["no", "n", "cancel", "wrong"]:
-                # User rejected - resend suggestions
+                # User rejected - increment attempt count and check if we should escalate
+                pending.attempt_count += 1
                 logger.info(
-                    "User rejected service selection, resending suggestions chat_id=%s",
+                    "User rejected service selection chat_id=%s attempt=%d",
                     chat_id,
+                    pending.attempt_count,
                 )
+
+                if pending.should_escalate():
+                    # Too many rejections - escalate and inform user
+                    logger.warning(
+                        "Escalating after %d rejection attempts chat_id=%s",
+                        pending.attempt_count,
+                        chat_id,
+                    )
+
+                    # Tell user the entry won't be processed
+                    notification_client = _get_notification_client()
+                    if notification_client:
+                        user_message = (
+                            "❌ *Your original entry will not be processed.*\n\n"
+                            "Please contact *Omar* for assistance."
+                        )
+                        try:
+                            notification_client.send_text(
+                                to=chat_id,
+                                body=user_message,
+                                quoted=pending.original_message_id,
+                            )
+                        except Exception as exc:
+                            logger.error("Failed to send rejection message: %s", exc)
+
+                    # Escalate with specific message about rejections
+                    escalation_message = build_escalation_message(
+                        pending.original_message,
+                        [f"User rejected service selection {pending.attempt_count} times"],
+                        pending.sender_name,
+                    )
+                    _send_escalation_to_all(escalation_message)
+                    tracker.remove_pending(chat_id)
+                    return True
+
+                # Still have retries left - resend suggestions
                 pending.awaiting_service_confirmation = None
                 _send_service_suggestions(
                     chat_id,
