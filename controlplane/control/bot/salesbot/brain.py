@@ -442,6 +442,7 @@ def check_and_handle_correction_reply(
     # Check if this is a reply to service suggestions
     if pending.service_suggestions:
         reply_stripped = message.strip()
+        selected_service: str | None = None
 
         # Check if we're awaiting confirmation for a previously selected service
         if pending.awaiting_service_confirmation:
@@ -487,8 +488,7 @@ def check_and_handle_correction_reply(
                     notification_client = _get_notification_client()
                     if notification_client:
                         user_message = (
-                            "❌ *Your original entry will not be processed.*\n\n"
-                            "Please contact *Omar* for assistance."
+                            "❌ *Your original entry will not be processed.*\n\nPlease contact *Omar* for assistance."
                         )
                         try:
                             notification_client.send_text(
@@ -523,8 +523,7 @@ def check_and_handle_correction_reply(
                 notification_client = _get_notification_client()
                 if notification_client:
                     error_message = (
-                        "❌ *Please reply with 'yes' or 'no'*\n\n"
-                        f"To confirm: *{pending.awaiting_service_confirmation}*"
+                        f"❌ *Please reply with 'yes' or 'no'*\n\nTo confirm: *{pending.awaiting_service_confirmation}*"
                     )
                     try:
                         notification_client.send_text(

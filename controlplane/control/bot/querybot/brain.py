@@ -16,7 +16,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
 from communicationPlane.telegramEngine.telegramInterface.telegram_client import TelegramClient  # noqa: E402
-from controlplane.boundary.llminterface.gemini_interface import GeminiInterface  # noqa: E402
+from controlplane.boundary.llminterface.llm_interface import LLMInterface, get_query_bot_llm  # noqa: E402
 from controlplane.boundary.storageInterface.saleCommissions import SaleCommissions  # noqa: E402
 from controlplane.boundary.storageInterface.salesAudit import SalesAudit  # noqa: E402
 from models.retry import RetryingTelegramClient  # noqa: E402
@@ -50,7 +50,7 @@ _load_env_files()
 
 _sales_audit: SalesAudit | None = None
 _sale_commissions: SaleCommissions | None = None
-_llm_interface: GeminiInterface | None = None
+_llm_interface: LLMInterface | None = None
 _reply_client: RetryingTelegramClient | None = None
 
 
@@ -72,10 +72,10 @@ def _get_sale_commissions() -> SaleCommissions | None:
     return _sale_commissions
 
 
-def _get_llm_interface() -> GeminiInterface:
+def _get_llm_interface() -> LLMInterface:
     global _llm_interface
     if _llm_interface is None:
-        _llm_interface = GeminiInterface(config={"temperature": 0})
+        _llm_interface = get_query_bot_llm()
     return _llm_interface
 
 
@@ -102,22 +102,20 @@ def _trim_records(records: list[dict[str, Any]], *, max_rows: int) -> list[dict[
 
 
 def build_spreadsheet_context() -> dict[str, Any]:
-    details_rows = _trim_records(
-        _get_sales_audit().read_details_sheet(),
-        max_rows=_get_max_rows("QUERYBOT_MAX_DETAILS_ROWS", 200),
-    )
+    # Read all sales audit rows (unbounded)
+    details_rows = _get_sales_audit().read_details_sheet()
     context: dict[str, Any] = {
         "sales_audit_rows": details_rows,
         "sales_audit_row_count": len(details_rows),
     }
 
-    # Add sale commissions data
+    # Add sale commissions data (limited to last 50 rows)
     commissions_client = _get_sale_commissions()
     if commissions_client is not None:
         try:
             commissions_rows = _trim_records(
                 commissions_client.read_commissions(),
-                max_rows=_get_max_rows("QUERYBOT_MAX_COMMISSIONS_ROWS", 500),
+                max_rows=_get_max_rows("QUERYBOT_MAX_COMMISSIONS_ROWS", 50),
             )
             context["sale_commissions_rows"] = commissions_rows
             context["sale_commissions_row_count"] = len(commissions_rows)
