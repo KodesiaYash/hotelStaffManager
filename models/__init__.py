@@ -1,7 +1,7 @@
 from models.chat_message import ChatMessage
 from models.deduplication import Deduplicator, InMemoryDeduplicator
-from models.retry import RetryingWhapiClient, RetryPolicy, retry_call
-from models.whapi import DEFAULT_BASE_URL, WhapiConfig, WhapiMessage
+from models.retry import RetryingTelegramClient, RetryPolicy, retry_call
+from models.telegram import DEFAULT_BASE_URL, TelegramConfig, TelegramMessage
 
 __all__ = [
     "DEFAULT_BASE_URL",
@@ -9,8 +9,8 @@ __all__ = [
     "Deduplicator",
     "InMemoryDeduplicator",
     "RetryPolicy",
-    "RetryingWhapiClient",
-    "WhapiConfig",
-    "WhapiMessage",
+    "RetryingTelegramClient",
+    "TelegramConfig",
+    "TelegramMessage",
     "retry_call",
 ]

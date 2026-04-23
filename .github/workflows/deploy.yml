@@ -1,0 +1,46 @@
+name: Deploy to Mac mini
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy (default: main)"
+        required: false
+        default: "main"
+
+concurrency:
+  # Prevent overlapping deploys; queue new ones, don't cancel in-progress.
+  group: deploy-mac-mini
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    # The runner on the Mac mini must be registered with these labels.
+    runs-on: [self-hosted, macOS, hotelstaffmanager]
+    timeout-minutes: 15
+
+    steps:
+      - name: Run deploy script
+        env:
+          # APP_DIR can be overridden via a repo variable; otherwise falls back
+          # to the default that deploy.sh itself uses ($HOME/apps/hotelStaffManager).
+          APP_DIR: ${{ vars.APP_DIR }}
+          DEPLOY_BRANCH: ${{ github.event.inputs.branch || 'main' }}
+        run: |
+          set -euo pipefail
+          : "${APP_DIR:=$HOME/apps/hotelStaffManager}"
+          if [ ! -x "$APP_DIR/deploy.sh" ]; then
+            echo "ERROR: $APP_DIR/deploy.sh not found or not executable." >&2
+            echo "Bootstrap the Mac mini once (see README) before first deploy." >&2
+            exit 1
+          fi
+          APP_DIR="$APP_DIR" DEPLOY_BRANCH="$DEPLOY_BRANCH" bash "$APP_DIR/deploy.sh"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "Branch: ${{ github.event.inputs.branch || 'main' }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Result: ${{ job.status }}"

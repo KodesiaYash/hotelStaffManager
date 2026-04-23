@@ -65,13 +65,13 @@ class ControlPlaneInterface:
             message.sender_id,
             len(message.text or ""),
         )
-        if message.source == "whapi" and message.is_group:
+        if message.source == "telegram" and message.is_group:
             # For group messages, check against sales group ID
             if self._sales_group_id and message.chat_id != self._sales_group_id:
                 logger.debug("Ignoring message outside sales group (chat_id=%s)", message.chat_id)
                 return
         elif (
-            message.source == "whapi"
+            message.source == "telegram"
             and not message.is_group
             and self._allowed_chat_ids
             and message.chat_id not in self._allowed_chat_ids
@@ -83,7 +83,7 @@ class ControlPlaneInterface:
             logger.debug("Ignoring message %s with no text", message.message_id)
             return
 
-        if message.source == "whapi":
+        if message.source == "telegram":
             if message.is_group:
                 logger.info("Routing to SalesBot chat_id=%s sender_id=%s", message.chat_id, message.sender_id)
                 try:

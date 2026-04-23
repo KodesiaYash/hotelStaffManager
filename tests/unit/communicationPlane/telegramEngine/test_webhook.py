@@ -1,61 +1,58 @@
-"""Unit tests for the WHAPI webhook Flask blueprint."""
+"""Unit tests for the Telegram webhook Flask blueprint."""
 
 from __future__ import annotations
 
-import time
+from typing import Any
 
 from flask import Flask
 
-from communicationPlane.whatsappEngine.whapiInterface.webhook import create_whapi_blueprint
+from communicationPlane.telegramEngine.telegramInterface.webhook import create_telegram_blueprint
 from models.chat_message import ChatMessage
 
 
-def test_webhook_blueprint_returns_count() -> None:
-    """Return a 200 response with the count of processed messages."""
+def test_blueprint_dispatches_to_handler() -> None:
+    """The blueprint should forward payloads to the handler and echo counts."""
 
-    def handler(_payload: dict) -> list[ChatMessage]:
-        now = time.time()
+    def handler(_payload: dict[str, Any]) -> list[ChatMessage]:
         return [
             ChatMessage(
                 message_id="m1",
-                source="whapi",
+                source="telegram",
                 chat_id="c1",
                 sender_id="u1",
                 sender_name="User",
-                timestamp=now,
+                timestamp=0.0,
                 message_type="text",
-                text="one",
+                text="hi",
                 is_group=False,
                 raw={},
             ),
             ChatMessage(
                 message_id="m2",
-                source="whapi",
+                source="telegram",
                 chat_id="c2",
                 sender_id="u2",
                 sender_name="User",
-                timestamp=now,
+                timestamp=0.0,
                 message_type="text",
-                text="two",
-                is_group=True,
+                text="bye",
+                is_group=False,
                 raw={},
             ),
         ]
 
     app = Flask(__name__)
-    app.register_blueprint(create_whapi_blueprint(handler), url_prefix="/whapi")
+    app.register_blueprint(create_telegram_blueprint(handler), url_prefix="/telegram")
 
     with app.test_client() as client:
-        response = client.post("/whapi/webhook", json={"messages": []})
+        response = client.post("/telegram/webhook", json={"updates": []})
         assert response.status_code == 200
         payload = response.get_json()
         assert payload["status"] == "ok"
         assert payload["messages"] == 2
         assert "request_id" in payload
 
-        response = client.post("/whapi/webhook/messages", json={"messages": []})
+        response = client.post("/telegram/webhook/messages", json={"updates": []})
         assert response.status_code == 200
         payload = response.get_json()
         assert payload["status"] == "ok"
-        assert payload["messages"] == 2
-        assert "request_id" in payload

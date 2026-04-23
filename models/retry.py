@@ -11,7 +11,7 @@ import requests
 T = TypeVar("T")
 
 
-class WhapiSender(Protocol):
+class TelegramSender(Protocol):
     def send_text(self, *args: Any, **kwargs: Any) -> dict[str, Any]: ...
 
     def send_notification(self, *args: Any, **kwargs: Any) -> dict[str, Any]: ...
@@ -64,8 +64,8 @@ def retry_call(
 
 
 @dataclass
-class RetryingWhapiClient:
-    client: WhapiSender
+class RetryingTelegramClient:
+    client: TelegramSender
     policy: RetryPolicy = field(default_factory=RetryPolicy)
 
     def send_text(self, *args: Any, **kwargs: Any) -> dict[str, Any]:

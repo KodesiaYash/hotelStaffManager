@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
-from models.whapi import WhapiMessage
+from models.telegram import TelegramMessage
 
 
 @dataclass(frozen=True)
@@ -20,16 +20,16 @@ class ChatMessage:
     raw: dict[str, Any]
 
     @classmethod
-    def from_whapi(cls, whapi_message: WhapiMessage, message_id: str) -> ChatMessage:
+    def from_telegram(cls, telegram_message: TelegramMessage, message_id: str) -> ChatMessage:
         return cls(
             message_id=message_id,
-            source="whapi",
-            chat_id=whapi_message.chat_id,
-            sender_id=whapi_message.from_id,
-            sender_name=whapi_message.from_name,
-            timestamp=whapi_message.timestamp,
-            message_type=whapi_message.message_type,
-            text=whapi_message.text,
-            is_group=whapi_message.is_group,
-            raw=whapi_message.raw,
+            source="telegram",
+            chat_id=telegram_message.chat_id,
+            sender_id=telegram_message.from_id,
+            sender_name=telegram_message.from_name,
+            timestamp=telegram_message.timestamp,
+            message_type=telegram_message.message_type,
+            text=telegram_message.text,
+            is_group=telegram_message.is_group,
+            raw=telegram_message.raw,
         )

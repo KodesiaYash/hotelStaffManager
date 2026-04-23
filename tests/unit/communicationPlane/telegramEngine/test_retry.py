@@ -1,4 +1,4 @@
-"""Unit tests for the retry policy and retrying WHAPI client wrapper."""
+"""Unit tests for the retry policy and retrying Telegram client wrapper."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ import pytest
 import requests
 
 from models import retry as retry_module
-from models.retry import RetryingWhapiClient, RetryPolicy, retry_call
+from models.retry import RetryingTelegramClient, RetryPolicy, retry_call
 
 
 class DummyHTTPError(RuntimeError):
@@ -113,7 +113,7 @@ def test_retry_policy_next_delay_caps_max(monkeypatch: pytest.MonkeyPatch) -> No
     assert delay == pytest.approx(2.1)
 
 
-def test_retrying_whapi_client_retries_send_text(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_retrying_telegram_client_retries_send_text(monkeypatch: pytest.MonkeyPatch) -> None:
     """Retry sending text through the wrapper client until it succeeds."""
     monkeypatch.setattr(retry_module.time, "sleep", lambda _delay: None)
 
@@ -140,7 +140,7 @@ def test_retrying_whapi_client_retries_send_text(monkeypatch: pytest.MonkeyPatch
             return self.send_text(*args, **kwargs)
 
     client = DummyClient()
-    wrapper = RetryingWhapiClient(client, policy=RetryPolicy(max_attempts=3, jitter=0.0))
+    wrapper = RetryingTelegramClient(client, policy=RetryPolicy(max_attempts=3, jitter=0.0))
     result = wrapper.send_text("123", "hello")
     assert result == {"status": "ok"}
     assert client.calls == 3

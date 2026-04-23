@@ -13,8 +13,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from communicationPlane.whatsappEngine.whapiInterface.whapi_client import (  # noqa: E402
-    WhapiClient,
+from communicationPlane.telegramEngine.telegramInterface.telegram_client import (  # noqa: E402
+    TelegramClient,
 )
 from controlplane.boundary.llminterface.llm_interface import (  # noqa: E402
     LLMInterface,
@@ -40,7 +40,7 @@ from controlplane.control.commissionService import (  # noqa: E402
     calculate_and_distribute_commissions,
     generate_sale_id,
 )
-from models.retry import RetryingWhapiClient  # noqa: E402
+from models.retry import RetryingTelegramClient  # noqa: E402
 from shared.logging_context import (  # noqa: E402
     log_low_confidence,
     log_medium_confidence,
@@ -125,7 +125,7 @@ _load_env_files()
 _sales_audit: SalesAudit | None = None
 _llm_interface: LLMInterface | None = None
 _staff_mapping: StaffToHotelMapping | None = None
-_notification_client: RetryingWhapiClient | None = None
+_notification_client: RetryingTelegramClient | None = None
 
 
 def _get_case_insensitive(row: dict[str, Any], keys: list[str]) -> Any | None:
@@ -167,12 +167,12 @@ def _get_staff_mapping() -> StaffToHotelMapping | None:
     return _staff_mapping
 
 
-def _get_notification_client() -> RetryingWhapiClient | None:
+def _get_notification_client() -> RetryingTelegramClient | None:
     global _notification_client
     if _notification_client is not None:
         return _notification_client
     try:
-        _notification_client = RetryingWhapiClient(WhapiClient())
+        _notification_client = RetryingTelegramClient(TelegramClient())
     except Exception as exc:
         logger.warning("Notification client not configured: %s", exc)
         _notification_client = None

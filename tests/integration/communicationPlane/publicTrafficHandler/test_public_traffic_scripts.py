@@ -257,24 +257,20 @@ def test_webhook_endpoint_receives_message() -> None:
             raise AssertionError("Server did not become healthy in time.")
 
         payload = {
-            "messages": [
-                {
-                    "id": "local-test-1",
-                    "type": "text",
-                    "chat_id": "other@g.us",
-                    "from": "111@c.us",
-                    "from_name": "Tester",
-                    "timestamp": 1700000000,
-                    "from_me": False,
-                    "text": {"body": "hello"},
-                }
-            ]
+            "update_id": 1,
+            "message": {
+                "message_id": 1,
+                "chat": {"id": -100999, "type": "group", "title": "Staff"},
+                "from": {"id": 111, "first_name": "Tester", "is_bot": False},
+                "date": 1700000000,
+                "text": "hello",
+            },
         }
         body = json.dumps(payload)
         conn = HTTPConnection("127.0.0.1", port, timeout=2)
         conn.request(
             "POST",
-            "/whapi/webhook/messages",
+            "/telegram/webhook/messages",
             body=body,
             headers={"Content-Type": "application/json"},
         )
