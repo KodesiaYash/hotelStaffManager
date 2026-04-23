@@ -70,3 +70,40 @@ def get_sales_bot_llm(provider: str | None = None) -> LLMInterface:
         cooldown,
     )
     return FallbackLLM(providers, cooldown_seconds=cooldown)
+
+
+def get_query_bot_llm(provider: str | None = None) -> LLMInterface:
+    """Return an LLM for the query bot.
+
+    Supports automatic 429/503 fallback when multiple providers are configured.
+    Set ``QUERYBOT_LLM_PROVIDER`` to a comma-separated list for fallback,
+    e.g. ``gemini,openai,claude``. Defaults to SALES_BOT_LLM_PROVIDER if not set.
+
+    A single provider name (no comma) returns that provider directly.
+    """
+    raw = (
+        provider or os.getenv("QUERYBOT_LLM_PROVIDER") or os.getenv("SALES_BOT_LLM_PROVIDER") or "gemini"
+    ).strip().lower()
+    names = [n.strip() for n in raw.split(",") if n.strip()]
+
+    if len(names) == 1:
+        logger.info("QueryBot LLM provider: %s", names[0])
+        return _build_provider(names[0])
+
+    # Multiple providers → fallback chain
+    providers: list[LLMInterface] = []
+    for name in names:
+        try:
+            providers.append(_build_provider(name))
+        except Exception as exc:
+            logger.warning("Skipping unavailable fallback provider %s: %s", name, exc)
+    if not providers:
+        raise ValueError(f"No valid LLM providers in fallback chain: {raw}")
+
+    cooldown = int(os.getenv("LLM_FALLBACK_COOLDOWN_SECONDS", "60"))
+    logger.info(
+        "QueryBot LLM fallback chain: %s (cooldown=%ds)",
+        " → ".join(names),
+        cooldown,
+    )
+    return FallbackLLM(providers, cooldown_seconds=cooldown)

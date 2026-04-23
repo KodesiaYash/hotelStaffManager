@@ -16,7 +16,7 @@ if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
 from communicationPlane.telegramEngine.telegramInterface.telegram_client import TelegramClient  # noqa: E402
-from controlplane.boundary.llminterface.gemini_interface import GeminiInterface  # noqa: E402
+from controlplane.boundary.llminterface.llm_interface import LLMInterface, get_query_bot_llm  # noqa: E402
 from controlplane.boundary.storageInterface.saleCommissions import SaleCommissions  # noqa: E402
 from controlplane.boundary.storageInterface.salesAudit import SalesAudit  # noqa: E402
 from models.retry import RetryingTelegramClient  # noqa: E402
@@ -50,7 +50,7 @@ _load_env_files()
 
 _sales_audit: SalesAudit | None = None
 _sale_commissions: SaleCommissions | None = None
-_llm_interface: GeminiInterface | None = None
+_llm_interface: LLMInterface | None = None
 _reply_client: RetryingTelegramClient | None = None
 
 
@@ -72,10 +72,10 @@ def _get_sale_commissions() -> SaleCommissions | None:
     return _sale_commissions
 
 
-def _get_llm_interface() -> GeminiInterface:
+def _get_llm_interface() -> LLMInterface:
     global _llm_interface
     if _llm_interface is None:
-        _llm_interface = GeminiInterface(config={"temperature": 0})
+        _llm_interface = get_query_bot_llm()
     return _llm_interface
 
 
