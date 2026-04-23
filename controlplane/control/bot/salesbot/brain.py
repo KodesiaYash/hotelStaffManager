@@ -768,24 +768,38 @@ def _resolve_staff_and_hotel(
     sender_id: str | None,
     extracted_hotel: str | None,
     extracted_name: str | None,
+    sender_name: str | None = None,
 ) -> tuple[str, str | None, bool]:
     mapping = _get_staff_mapping()
     if mapping is None:
         logger.error("Staff mapping not configured; cannot resolve staff name")
         return extracted_name or "", extracted_hotel, True
 
-    normalized = normalize_phone(sender_id)
-    if not normalized:
-        logger.error("Missing sender phone, cannot map staff")
-        return extracted_name or "", extracted_hotel, True
+    matches: list[dict[str, Any]] = []
 
-    try:
-        matches = mapping.find_by_phone(normalized)
-    except Exception as exc:
-        logger.error("Failed to read staff mapping: %s", exc, exc_info=True)
-        return extracted_name or "", extracted_hotel, True
+    # Try username lookup first (for Telegram)
+    if sender_name:
+        try:
+            matches = mapping.find_by_username(sender_name)
+            if matches:
+                logger.debug("Found staff mapping by username=%s", sender_name)
+        except Exception as exc:
+            logger.warning("Username lookup failed: %s", exc)
+
+    # Fall back to phone lookup if username didn't match
     if not matches:
-        logger.error("No staff mapping for phone=%s", normalized)
+        normalized = normalize_phone(sender_id)
+        if normalized:
+            try:
+                matches = mapping.find_by_phone(normalized)
+                if matches:
+                    logger.debug("Found staff mapping by phone=%s", normalized)
+            except Exception as exc:
+                logger.error("Failed to read staff mapping: %s", exc, exc_info=True)
+                return extracted_name or "", extracted_hotel, True
+
+    if not matches:
+        logger.error("No staff mapping for username=%s phone=%s", sender_name, sender_id)
         return extracted_name or "", extracted_hotel, True
 
     names = {
@@ -794,10 +808,10 @@ def _resolve_staff_and_hotel(
         if val
     }
     if not names:
-        logger.error("Staff mapping missing name for phone=%s", normalized)
+        logger.error("Staff mapping missing name for username=%s phone=%s", sender_name, sender_id)
         return extracted_name or "", extracted_hotel, True
     if len(names) > 1:
-        logger.warning("Multiple staff names found for phone=%s: %s", normalized, sorted(names))
+        logger.warning("Multiple staff names found for username=%s phone=%s: %s", sender_name, sender_id, sorted(names))
     staff_name = sorted(names)[0]
 
     hotels = {
@@ -812,12 +826,13 @@ def _resolve_staff_and_hotel(
         return staff_name, next(iter(hotels)), False
     if len(hotels) > 1:
         logger.error(
-            "Ambiguous staff mapping: phone=%s supports multiple hotels %s but message has no hotel name",
-            normalized,
+            "Ambiguous staff mapping: username=%s phone=%s supports multiple hotels %s but message has no hotel name",
+            sender_name,
+            sender_id,
             sorted(hotels),
         )
         return staff_name, None, True
-    logger.error("Staff mapping missing hotel for phone=%s", normalized)
+    logger.error("Staff mapping missing hotel for username=%s phone=%s", sender_name, sender_id)
     return staff_name, extracted_hotel, True
 
 
@@ -875,6 +890,7 @@ def process_message(
     sender_id: str | None = None,
     chat_id: str | None = None,
     message_id: str | None = None,
+    sender_name: str | None = None,
 ) -> None:
     """Process a sales message, with optional correction flow.
 
@@ -883,13 +899,15 @@ def process_message(
         sender_id: The sender's phone number/ID
         chat_id: The chat ID (needed for correction requests)
         message_id: The original message ID (for quoted replies)
+        sender_name: The sender's username (for staff lookup)
     """
     logger.debug(
-        "SalesBot processing message length=%d sender_id=%s chat_id=%s message_id=%s",
+        "SalesBot processing message length=%d sender_id=%s chat_id=%s message_id=%s sender_name=%s",
         len(message),
         sender_id,
         chat_id,
         message_id,
+        sender_name,
     )
 
     # Check if this is a reply to a pending correction request
@@ -1013,11 +1031,13 @@ def process_message(
             sender_id,
             extracted_hotel,
             str(_get_case_insensitive(entry, ["Asignee"]) or "").strip() or None,
+            sender_name=sender_name,
         )
         if mapping_error:
             logger.error(
-                "SalesBot skipping sheet write staff_mapping_error sender_id=%s message_preview=%s",
+                "SalesBot skipping sheet write staff_mapping_error sender_id=%s sender_name=%s message_preview=%s",
                 sender_id,
+                sender_name,
                 message[:200],
             )
             continue
