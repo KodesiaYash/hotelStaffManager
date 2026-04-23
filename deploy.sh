@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-$HOME/apps/hotelStaffManager}"
+APP_DIR="${APP_DIR:-$HOME/Desktop/DeploymentHost/hotelStaffManager}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 COMPOSE_SERVICE="${COMPOSE_SERVICE:-app}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:5050/health}"
@@ -49,6 +49,58 @@ docker compose build "$COMPOSE_SERVICE"
 
 log "Restarting service '$COMPOSE_SERVICE' (detached)"
 docker compose up -d "$COMPOSE_SERVICE"
+
+# ── Ensure Cloudflare tunnel is running (idempotent) ───────────────────────
+CLOUDFLARED_LOG="${CLOUDFLARED_LOG:-$APP_DIR/logs/cloudflared.log}"
+CLOUDFLARED_PID_FILE="${CLOUDFLARED_PID_FILE:-$APP_DIR/logs/cloudflared.pid}"
+mkdir -p "$(dirname "$CLOUDFLARED_LOG")"
+
+if pgrep -fq 'cloudflared.*tunnel.*run'; then
+  log "Cloudflare tunnel already running (pid=$(pgrep -f 'cloudflared.*tunnel.*run' | head -1))"
+else
+  if ! command -v cloudflared >/dev/null 2>&1; then
+    log "WARN: cloudflared is not installed on PATH — skipping tunnel start"
+  else
+    # Read TUNNEL_TOKEN from the env file (not from the shell environment,
+    # so we don't require it to be exported for the runner).
+    TUNNEL_TOKEN="$(grep -E '^[[:space:]]*TUNNEL_TOKEN[[:space:]]*=' "$APP_DIR/env" \
+                    | head -1 \
+                    | sed -E 's/^[[:space:]]*TUNNEL_TOKEN[[:space:]]*=[[:space:]]*//; s/^"(.*)"$/\1/; s/^'\''(.*)'\''$/\1/' \
+                    || true)"
+    if [ -z "${TUNNEL_TOKEN:-}" ]; then
+      log "WARN: TUNNEL_TOKEN not found in $APP_DIR/env — skipping tunnel start"
+    else
+      log "Starting Cloudflare tunnel (logs: $CLOUDFLARED_LOG)"
+      nohup cloudflared tunnel --no-autoupdate run --token "$TUNNEL_TOKEN" \
+        >>"$CLOUDFLARED_LOG" 2>&1 </dev/null &
+      echo $! >"$CLOUDFLARED_PID_FILE"
+      # Give it a moment to fail fast if the token is bad
+      sleep 2
+      if pgrep -fq 'cloudflared.*tunnel.*run'; then
+        log "Cloudflare tunnel started (pid=$(cat "$CLOUDFLARED_PID_FILE"))"
+      else
+        log "WARN: cloudflared exited immediately — check $CLOUDFLARED_LOG"
+      fi
+    fi
+    unset TUNNEL_TOKEN
+  fi
+fi
+
+# ── Ensure observability stack is running (idempotent no-op if healthy) ─────
+OBSERVABILITY_SERVICES=(loki promtail grafana)
+RUNNING_SERVICES="$(docker compose ps --services --status running 2>/dev/null || true)"
+missing_services=()
+for svc in "${OBSERVABILITY_SERVICES[@]}"; do
+  if ! grep -qx "$svc" <<<"$RUNNING_SERVICES"; then
+    missing_services+=("$svc")
+  fi
+done
+if [ "${#missing_services[@]}" -gt 0 ]; then
+  log "Starting observability services: ${missing_services[*]}"
+  docker compose up -d "${missing_services[@]}" || log "WARN: failed to start observability services (non-fatal)"
+else
+  log "Observability services already running: ${OBSERVABILITY_SERVICES[*]}"
+fi
 
 # ── Housekeeping ────────────────────────────────────────────────────────────
 log "Pruning dangling images"
