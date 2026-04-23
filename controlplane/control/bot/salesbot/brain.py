@@ -1180,7 +1180,44 @@ def process_message(
             )
             if chat_id:
                 # Alert admin about zero price issue
-                _escalate_unknown_service(chat_id, sender_id, sender_name, str(service), message)
+                escalation_message = (
+                    f"🚨 *SalesBot Escalation - Zero/Missing Price*\n\n"
+                    f"*User:* {sender_name or 'Unknown'}\n"
+                    f"*Service:* {service}\n"
+                    f"*Quantity:* {quantity_value}\n"
+                    f"*Selling Price:* {selling_price}\n"
+                    f"*Cost Price:* {cost_price}\n\n"
+                    f"*Original Message:*\n```\n{message[:500]}\n```\n\n"
+                    f"_Price data is missing or zero. Please update pricelist or manually process._"
+                )
+                _send_escalation_to_all(escalation_message)
+            continue
+
+        # Check for negative or zero profit - escalate and don't write
+        profit = selling_price - cost_price
+        if profit <= 0:
+            logger.warning(
+                "Skipping entry with non-positive profit: service=%s selling_price=%s cost_price=%s profit=%s chat_id=%s",
+                service,
+                selling_price,
+                cost_price,
+                profit,
+                chat_id,
+            )
+            if chat_id:
+                # Alert admin about profit issue
+                escalation_message = (
+                    f"🚨 *SalesBot Escalation - Negative/Zero Profit*\n\n"
+                    f"*User:* {sender_name or 'Unknown'}\n"
+                    f"*Service:* {service}\n"
+                    f"*Quantity:* {quantity_value}\n"
+                    f"*Selling Price:* {selling_price} MAD\n"
+                    f"*Cost Price:* {cost_price} MAD\n"
+                    f"*Profit:* {profit} MAD\n\n"
+                    f"*Original Message:*\n```\n{message[:500]}\n```\n\n"
+                    f"_Cost exceeds or equals selling price. Please review pricelist or manually process._"
+                )
+                _send_escalation_to_all(escalation_message)
             continue
 
         # Generate unique sale ID for commission tracking

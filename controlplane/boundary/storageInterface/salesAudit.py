@@ -394,7 +394,8 @@ def service_exists_in_pricelist(
 
     service_lower = service_value.strip().lower()
 
-    # First check for exact/substring match
+    # First collect ALL exact/substring matches
+    substring_matches: list[str] = []
     for row in records:
         row_service = _get_case_insensitive(row, ["service", "item", "name"])
         if not row_service:
@@ -408,9 +409,19 @@ def service_exists_in_pricelist(
             or service_lower in row_service_lower
             or row_service_lower in service_lower
         ):
-            return True, row_service_str, []
+            substring_matches.append(row_service_str)
 
-    # No exact match, find nearest
+    # If exactly one substring match, auto-use it
+    if len(substring_matches) == 1:
+        return True, substring_matches[0], []
+
+    # If multiple substring matches, return them as suggestions with high scores
+    if len(substring_matches) > 1:
+        # Return as suggestions so user can choose
+        suggestions = [(name, 0.95) for name in substring_matches]
+        return False, None, suggestions
+
+    # No exact match, find nearest with fuzzy matching
     nearest = find_nearest_services(service_value, records, top_n=5)
 
     # Check if any are above threshold
