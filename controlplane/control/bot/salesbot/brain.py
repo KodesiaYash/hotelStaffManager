@@ -48,8 +48,12 @@ from shared.logging_context import (  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
-# Alert number for escalations (QueryBot DM)
-ESCALATION_CHAT_ID = os.getenv("ESCALATION_CHAT_ID", "").strip()
+# Alert numbers for escalations (QueryBot DM)
+# Supports both ESCALATION_CHAT_ID (single) and ESCALATION_CHAT_IDS (comma-separated)
+_escalation_ids = os.getenv("ESCALATION_CHAT_IDS", "").strip()
+if not _escalation_ids:
+    _escalation_ids = os.getenv("ESCALATION_CHAT_ID", "").strip()
+ESCALATION_CHAT_IDS = [x.strip() for x in _escalation_ids.split(",") if x.strip()]
 
 DEFAULT_PROMPT = (
     "Analyze this WhatsApp message for a sales lead. The service name may be mentioned "
@@ -206,15 +210,10 @@ def _send_correction_request(
         return False
 
 
-def _send_escalation(
-    chat_id: str,
-    sender_id: str | None,
-    original_message: str,
-    validation_failures: list[str],
-) -> bool:
-    """Escalate to the alert number when corrections fail repeatedly."""
-    if not ESCALATION_CHAT_ID:
-        logger.warning("ESCALATION_CHAT_ID not set; cannot escalate")
+def _send_escalation_to_all(message: str) -> bool:
+    """Send escalation message to all configured escalation chat IDs."""
+    if not ESCALATION_CHAT_IDS:
+        logger.warning("ESCALATION_CHAT_IDS not set; cannot escalate")
         return False
 
     notification_client = _get_notification_client()
@@ -222,18 +221,26 @@ def _send_escalation(
         logger.warning("Notification client not available; cannot escalate")
         return False
 
+    success = False
+    for chat_id in ESCALATION_CHAT_IDS:
+        try:
+            notification_client.send_text(to=chat_id, body=message)
+            logger.info("Escalated to %s", chat_id)
+            success = True
+        except Exception as exc:
+            logger.error("Failed to send escalation to %s: %s", chat_id, exc, exc_info=True)
+    return success
+
+
+def _send_escalation(
+    chat_id: str,
+    sender_id: str | None,
+    original_message: str,
+    validation_failures: list[str],
+) -> bool:
+    """Escalate to the alert number when corrections fail repeatedly."""
     message = build_escalation_message(original_message, validation_failures, sender_id, chat_id)
-    try:
-        notification_client.send_text(to=ESCALATION_CHAT_ID, body=message)
-        logger.info(
-            "Escalated validation failure to %s for chat_id=%s",
-            ESCALATION_CHAT_ID,
-            chat_id,
-        )
-        return True
-    except Exception as exc:
-        logger.error("Failed to send escalation: %s", exc, exc_info=True)
-        return False
+    return _send_escalation_to_all(message)
 
 
 def _send_service_suggestions(
@@ -271,28 +278,8 @@ def _escalate_unknown_service(
     original_message: str,
 ) -> bool:
     """Escalate when a service is not found in pricelist and no good suggestions exist."""
-    if not ESCALATION_CHAT_ID:
-        logger.warning("ESCALATION_CHAT_ID not set; cannot escalate unknown service")
-        return False
-
-    notification_client = _get_notification_client()
-    if notification_client is None:
-        logger.warning("Notification client not available; cannot escalate")
-        return False
-
     message = build_service_not_found_escalation(service_name, original_message, sender_id, chat_id)
-    try:
-        notification_client.send_text(to=ESCALATION_CHAT_ID, body=message)
-        logger.info(
-            "Escalated unknown service to %s service=%s chat_id=%s",
-            ESCALATION_CHAT_ID,
-            service_name,
-            chat_id,
-        )
-        return True
-    except Exception as exc:
-        logger.error("Failed to escalate unknown service: %s", exc, exc_info=True)
-        return False
+    return _send_escalation_to_all(message)
 
 
 def _send_commission_notification(
@@ -364,8 +351,8 @@ def _send_final_escalation(
     except Exception as exc:
         logger.error("Failed to send final escalation to user: %s", exc, exc_info=True)
 
-    # Also alert admin via ESCALATION_CHAT_ID
-    if ESCALATION_CHAT_ID:
+    # Also alert admin via ESCALATION_CHAT_IDS
+    if ESCALATION_CHAT_IDS:
         admin_message = (
             "🚨 *SalesBot Escalation - Repeated Invalid Input*\n\n"
             f"*Chat ID:* `{chat_id}`\n"
@@ -374,11 +361,7 @@ def _send_final_escalation(
             f"```\n{original_message[:500]}\n```\n\n"
             "_User failed to provide valid input after multiple attempts._"
         )
-        try:
-            notification_client.send_text(to=ESCALATION_CHAT_ID, body=admin_message)
-            logger.info("Sent final escalation to admin %s", ESCALATION_CHAT_ID)
-        except Exception as exc:
-            logger.error("Failed to send final escalation to admin: %s", exc, exc_info=True)
+        _send_escalation_to_all(admin_message)
 
     return True
 
@@ -419,23 +402,15 @@ def process_expired_corrections() -> int:
             logger.error("Failed to send timeout message to user: %s", exc, exc_info=True)
 
         # Escalate to admin
-        if ESCALATION_CHAT_ID:
-            try:
-                admin_message = build_timeout_escalation_message(
-                    correction.original_message,
-                    correction.validation_failures,
-                    correction.sender_id,
-                    correction.chat_id,
-                )
-                notification_client.send_text(to=ESCALATION_CHAT_ID, body=admin_message)
-                logger.info(
-                    "Escalated expired correction to admin %s chat_id=%s",
-                    ESCALATION_CHAT_ID,
-                    correction.chat_id,
-                )
+        if ESCALATION_CHAT_IDS:
+            admin_message = build_timeout_escalation_message(
+                correction.original_message,
+                correction.validation_failures,
+                correction.sender_id,
+                correction.chat_id,
+            )
+            if _send_escalation_to_all(admin_message):
                 escalated += 1
-            except Exception as exc:
-                logger.error("Failed to escalate expired correction: %s", exc, exc_info=True)
 
     return escalated
 
