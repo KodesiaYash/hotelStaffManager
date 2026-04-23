@@ -235,11 +235,12 @@ def _send_escalation_to_all(message: str) -> bool:
 def _send_escalation(
     chat_id: str,
     sender_id: str | None,
+    sender_name: str | None,
     original_message: str,
     validation_failures: list[str],
 ) -> bool:
     """Escalate to the alert number when corrections fail repeatedly."""
-    message = build_escalation_message(original_message, validation_failures, sender_id, chat_id)
+    message = build_escalation_message(original_message, validation_failures, sender_name)
     return _send_escalation_to_all(message)
 
 
@@ -274,11 +275,12 @@ def _send_service_suggestions(
 def _escalate_unknown_service(
     chat_id: str,
     sender_id: str | None,
+    sender_name: str | None,
     service_name: str,
     original_message: str,
 ) -> bool:
     """Escalate when a service is not found in pricelist and no good suggestions exist."""
-    message = build_service_not_found_escalation(service_name, original_message, sender_id, chat_id)
+    message = build_service_not_found_escalation(service_name, original_message, sender_name)
     return _send_escalation_to_all(message)
 
 
@@ -335,6 +337,7 @@ def _send_invalid_selection(
 def _send_final_escalation(
     chat_id: str,
     sender_id: str | None,
+    sender_name: str | None,
     original_message: str,
 ) -> bool:
     """Send final escalation - tell user to contact Omar and alert admin."""
@@ -355,8 +358,7 @@ def _send_final_escalation(
     if ESCALATION_CHAT_IDS:
         admin_message = (
             "🚨 *SalesBot Escalation - Repeated Invalid Input*\n\n"
-            f"*Chat ID:* `{chat_id}`\n"
-            f"*Sender:* `{sender_id or 'Unknown'}`\n\n"
+            f"*User:* {sender_name or 'Unknown'}\n\n"
             "*Original Message:*\n"
             f"```\n{original_message[:500]}\n```\n\n"
             "_User failed to provide valid input after multiple attempts._"
@@ -406,8 +408,7 @@ def process_expired_corrections() -> int:
             admin_message = build_timeout_escalation_message(
                 correction.original_message,
                 correction.validation_failures,
-                correction.sender_id,
-                correction.chat_id,
+                correction.sender_name,
             )
             if _send_escalation_to_all(admin_message):
                 escalated += 1
@@ -415,7 +416,9 @@ def process_expired_corrections() -> int:
     return escalated
 
 
-def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_id: str) -> bool:
+def check_and_handle_correction_reply(
+    message: str, sender_id: str | None, sender_name: str | None, chat_id: str
+) -> bool:
     """Check if this message is a reply to a correction request.
 
     If there's a pending correction for this chat, merge the new message
@@ -506,7 +509,7 @@ def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_
                 pending.attempt_count,
                 chat_id,
             )
-            _send_final_escalation(chat_id, sender_id, pending.original_message)
+            _send_final_escalation(chat_id, sender_id, pending.sender_name, pending.original_message)
             tracker.remove_pending(chat_id)
         else:
             _send_invalid_selection(
@@ -548,6 +551,7 @@ def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_
         pending = tracker.add_pending(
             chat_id=chat_id,
             sender_id=sender_id,
+            sender_name=pending.sender_name,
             original_message=combined_message,
             extracted_data=entry,
             validation_failures=validation_failures,
@@ -560,7 +564,7 @@ def check_and_handle_correction_reply(message: str, sender_id: str | None, chat_
                 pending.attempt_count,
                 chat_id,
             )
-            _send_escalation(chat_id, sender_id, pending.original_message, validation_failures)
+            _send_escalation(chat_id, sender_id, pending.sender_name, pending.original_message, validation_failures)
             tracker.remove_pending(chat_id)
         else:
             _send_correction_request(chat_id, validation_failures, entry, quoted_message_id=pending.original_message_id)
@@ -886,7 +890,7 @@ def process_message(
     )
 
     # Check if this is a reply to a pending correction request
-    if chat_id and check_and_handle_correction_reply(message, sender_id, chat_id):
+    if chat_id and check_and_handle_correction_reply(message, sender_id, sender_name, chat_id):
         logger.info("Message handled as correction reply chat_id=%s", chat_id)
         return
 
@@ -968,6 +972,7 @@ def process_message(
                 pending = tracker.add_pending(
                     chat_id=chat_id,
                     sender_id=sender_id,
+                    sender_name=sender_name,
                     original_message=message,
                     extracted_data=entry,
                     validation_failures=validation_failures,
@@ -981,7 +986,7 @@ def process_message(
                         pending.attempt_count,
                         chat_id,
                     )
-                    _send_escalation(chat_id, sender_id, message, validation_failures)
+                    _send_escalation(chat_id, sender_id, sender_name, message, validation_failures)
                     tracker.remove_pending(chat_id)
                 else:
                     # Send correction request to user (as reply to original message)
@@ -1044,6 +1049,7 @@ def process_message(
                     tracker.add_pending(
                         chat_id=chat_id,
                         sender_id=sender_id,
+                        sender_name=sender_name,
                         original_message=message,
                         extracted_data=entry,
                         validation_failures=[f"Service '{service}' not found in price list"],
@@ -1058,7 +1064,7 @@ def process_message(
                         service,
                         chat_id,
                     )
-                    _escalate_unknown_service(chat_id, sender_id, str(service), message)
+                    _escalate_unknown_service(chat_id, sender_id, sender_name, str(service), message)
                     continue
             elif matched_service:
                 # Use the matched service name from pricelist
@@ -1079,7 +1085,7 @@ def process_message(
             )
             if chat_id:
                 # Alert admin about zero price issue
-                _escalate_unknown_service(chat_id, sender_id, str(service), message)
+                _escalate_unknown_service(chat_id, sender_id, sender_name, str(service), message)
             continue
 
         # Generate unique sale ID for commission tracking
