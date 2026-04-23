@@ -30,6 +30,7 @@ class PendingCorrection:
 
     chat_id: str
     sender_id: str | None
+    sender_name: str | None
     original_message: str
     extracted_data: dict[str, Any]
     validation_failures: list[str]
@@ -92,6 +93,7 @@ class CorrectionTracker:
         self,
         chat_id: str,
         sender_id: str | None,
+        sender_name: str | None,
         original_message: str,
         extracted_data: dict[str, Any],
         validation_failures: list[str],
@@ -121,6 +123,7 @@ class CorrectionTracker:
             correction = PendingCorrection(
                 chat_id=chat_id,
                 sender_id=sender_id,
+                sender_name=sender_name,
                 original_message=original_message,
                 extracted_data=extracted_data,
                 validation_failures=validation_failures,
@@ -266,14 +269,12 @@ def build_final_escalation_message() -> str:
 def build_timeout_escalation_message(
     original_message: str,
     validation_failures: list[str],
-    sender_id: str | None,
-    chat_id: str,
+    sender_name: str | None,
 ) -> str:
     """Build an escalation message when user didn't reply within 24 hours."""
     lines = [
         "🚨 *SalesBot Escalation - No Response (24h Timeout)*\n",
-        f"*Chat ID:* `{chat_id}`",
-        f"*Sender:* `{sender_id or 'Unknown'}`",
+        f"*User:* {sender_name or 'Unknown'}",
         "\n*Validation Issues:*",
     ]
 
@@ -290,15 +291,13 @@ def build_timeout_escalation_message(
 def build_service_not_found_escalation(
     service_name: str,
     original_message: str,
-    sender_id: str | None,
-    chat_id: str,
+    sender_name: str | None,
 ) -> str:
     """Build an escalation message when service is not found in pricelist."""
     lines = [
         "🚨 *SalesBot Escalation - Unknown Service*\n",
         f"*Service:* `{service_name}`",
-        f"*Chat ID:* `{chat_id}`",
-        f"*Sender:* `{sender_id or 'Unknown'}`",
+        f"*User:* {sender_name or 'Unknown'}",
         "\n*Original Message:*",
         f"```\n{original_message[:500]}\n```",
         "\n_This service does not exist in the price list. Please add it or manually process._",
@@ -310,14 +309,12 @@ def build_service_not_found_escalation(
 def build_escalation_message(
     original_message: str,
     validation_failures: list[str],
-    sender_id: str | None,
-    chat_id: str,
+    sender_name: str | None,
 ) -> str:
     """Build an escalation message for the alert number."""
     lines = [
         "🚨 *SalesBot Escalation - Repeated Validation Failure*\n",
-        f"*Chat ID:* `{chat_id}`",
-        f"*Sender:* `{sender_id or 'Unknown'}`",
+        f"*User:* {sender_name or 'Unknown'}",
         "\n*Validation Issues:*",
     ]
 
