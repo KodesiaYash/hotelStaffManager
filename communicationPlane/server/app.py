@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 import sys
 import threading
 import time
@@ -132,6 +133,54 @@ def process() -> tuple[Any, int]:
 def health() -> tuple[Any, int]:
     logger.info("HTTP /health called from %s", request.remote_addr)
     return jsonify({"status": "ok"}), 200
+
+
+@app.route("/logs", methods=["GET"])
+def logs() -> tuple[Any, int]:
+    """Get docker compose logs for all services or a specific service."""
+    logger.info("HTTP /logs called from %s", request.remote_addr)
+
+    service = request.args.get("service")
+    tail = request.args.get("tail", "100")
+    since = request.args.get("since")
+
+    try:
+        cmd = ["docker", "compose", "logs"]
+
+        if tail:
+            cmd.extend(["--tail", str(tail)])
+
+        if since:
+            cmd.extend(["--since", since])
+
+        if service:
+            cmd.append(service)
+
+        result = subprocess.run(
+            cmd,
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            timeout=30,
+        )
+
+        return jsonify(
+            {
+                "status": "success",
+                "logs": result.stdout,
+                "stderr": result.stderr,
+                "returncode": result.returncode,
+            }
+        ), 200
+    except subprocess.TimeoutExpired:
+        logger.error("HTTP /logs timeout")
+        return jsonify({"error": "Command timeout"}), 504
+    except FileNotFoundError:
+        logger.error("HTTP /logs docker compose not found")
+        return jsonify({"error": "docker compose not found"}), 500
+    except Exception as exc:
+        logger.error("HTTP /logs failed: %s", exc, exc_info=True)
+        return jsonify({"error": str(exc)}), 500
 
 
 if __name__ == "__main__":
