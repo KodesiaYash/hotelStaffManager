@@ -137,6 +137,26 @@ class StaffToHotelMapping:
                 matches.append(row)
         return matches
 
+    def find_by_username(self, username: str) -> list[dict[str, Any]]:
+        """Find staff by username (e.g., Telegram username)."""
+        if not username:
+            return []
+        # Normalize: remove @ prefix if present, lowercase
+        normalized = username.lstrip("@").strip().lower()
+        if not normalized:
+            return []
+        matches: list[dict[str, Any]] = []
+        for row in self.read_mapping():
+            row_username = _get_case_insensitive(
+                row,
+                ["username", "telegram_username", "telegram", "tg_username", "tg"],
+            )
+            if row_username:
+                row_norm = str(row_username).lstrip("@").strip().lower()
+                if row_norm == normalized:
+                    matches.append(row)
+        return matches
+
 
 def normalize_phone(value: str | None) -> str:
     return _normalize_phone(value)

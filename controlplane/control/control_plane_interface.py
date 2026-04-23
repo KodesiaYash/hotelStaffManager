@@ -11,7 +11,7 @@ from models.chat_message import ChatMessage
 
 logger = logging.getLogger(__name__)
 
-SalesBotHandler = Callable[[str, str | None, str | None, str | None], None]
+SalesBotHandler = Callable[[str, str | None, str | None, str | None, str | None], None]
 
 
 class QueryBotHandler(Protocol):
@@ -85,9 +85,20 @@ class ControlPlaneInterface:
 
         if message.source == "telegram":
             if message.is_group:
-                logger.info("Routing to SalesBot chat_id=%s sender_id=%s", message.chat_id, message.sender_id)
+                logger.info(
+                    "Routing to SalesBot chat_id=%s sender_id=%s sender_name=%s",
+                    message.chat_id,
+                    message.sender_id,
+                    message.sender_name,
+                )
                 try:
-                    self._sales_bot_handler(message.text, message.sender_id, message.chat_id, message.message_id)
+                    self._sales_bot_handler(
+                        message.text,
+                        message.sender_id,
+                        message.chat_id,
+                        message.message_id,
+                        message.sender_name,
+                    )
                 except Exception as exc:
                     logger.error(
                         "SalesBot handler failed error=%s chat_id=%s sender_id=%s message_preview=%s",

@@ -47,7 +47,7 @@ jobs:
       - name: Run deploy script
         env:
           # APP_DIR can be overridden via a repo variable; otherwise falls back
-          # to the default used by deploy.sh itself.
+          # to the default ($HOME/Desktop/DeploymentHost/hotelStaffManager).
           APP_DIR: ${{ vars.APP_DIR }}
           DEPLOY_BRANCH: ${{ github.event.inputs.branch || 'main' }}
         run: |
