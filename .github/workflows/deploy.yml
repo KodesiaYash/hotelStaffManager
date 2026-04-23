@@ -44,10 +44,27 @@ jobs:
           chmod 600 "$APP_DIR/env"
           echo "Wrote $(wc -l <"$APP_DIR/env" | tr -d ' ') lines ($(wc -c <"$APP_DIR/env" | tr -d ' ') bytes) to $APP_DIR/env"
 
+      - name: Write Google Sheets service account JSON
+        env:
+          APP_DIR: ${{ vars.APP_DIR }}
+          GOOGLE_SHEETS_JSON: ${{ secrets.GOOGLE_SHEETS_JSON }}
+        run: |
+          set -euo pipefail
+          : "${APP_DIR:=$HOME/Desktop/DeploymentHost/hotelStaffManager}"
+          if [ -z "${GOOGLE_SHEETS_JSON:-}" ]; then
+            echo "WARNING: secret 'GOOGLE_SHEETS_JSON' is empty. Skipping." >&2
+          else
+            mkdir -p "$APP_DIR/envConfig/sales"
+            umask 077
+            printf '%s' "$GOOGLE_SHEETS_JSON" > "$APP_DIR/envConfig/sales/salesAccount.json"
+            chmod 600 "$APP_DIR/envConfig/sales/salesAccount.json"
+            echo "Wrote $(wc -c <"$APP_DIR/envConfig/sales/salesAccount.json" | tr -d ' ') bytes to $APP_DIR/envConfig/sales/salesAccount.json"
+          fi
+
       - name: Run deploy script
         env:
           # APP_DIR can be overridden via a repo variable; otherwise falls back
-          # to the default ($HOME/Desktop/DeploymentHost/hotelStaffManager).
+          # to the default used by deploy.sh itself.
           APP_DIR: ${{ vars.APP_DIR }}
           DEPLOY_BRANCH: ${{ github.event.inputs.branch || 'main' }}
         run: |
