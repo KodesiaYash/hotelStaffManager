@@ -19,18 +19,40 @@ jobs:
   deploy:
     # The runner on the Mac mini must be registered with these labels.
     runs-on: [self-hosted, macOS, hotelstaffmanager]
+    # Bind to the `prod` environment so ${{ secrets.ENV }} resolves.
+    environment: prod
     timeout-minutes: 15
 
     steps:
+      - name: Write env file from secret
+        env:
+          APP_DIR: ${{ vars.APP_DIR }}
+          # The full env file contents, stored as the `ENV` secret in the
+          # `prod` environment. Never echoed — only written to disk.
+          APP_ENV_CONTENTS: ${{ secrets.ENV }}
+        run: |
+          set -euo pipefail
+          : "${APP_DIR:=$HOME/Desktop/DeploymentHost/hotelStaffManager}"
+          if [ -z "${APP_ENV_CONTENTS:-}" ]; then
+            echo "ERROR: secret 'ENV' is empty or not available to this job." >&2
+            echo "Check: Settings → Environments → prod → secret named ENV." >&2
+            exit 1
+          fi
+          mkdir -p "$APP_DIR"
+          umask 077
+          printf '%s' "$APP_ENV_CONTENTS" > "$APP_DIR/env"
+          chmod 600 "$APP_DIR/env"
+          echo "Wrote $(wc -l <"$APP_DIR/env" | tr -d ' ') lines ($(wc -c <"$APP_DIR/env" | tr -d ' ') bytes) to $APP_DIR/env"
+
       - name: Run deploy script
         env:
           # APP_DIR can be overridden via a repo variable; otherwise falls back
-          # to the default that deploy.sh itself uses ($HOME/apps/hotelStaffManager).
+          # to the default used by deploy.sh itself.
           APP_DIR: ${{ vars.APP_DIR }}
           DEPLOY_BRANCH: ${{ github.event.inputs.branch || 'main' }}
         run: |
           set -euo pipefail
-          : "${APP_DIR:=$HOME/apps/hotelStaffManager}"
+          : "${APP_DIR:=$HOME/Desktop/DeploymentHost/hotelStaffManager}"
           if [ ! -x "$APP_DIR/deploy.sh" ]; then
             echo "ERROR: $APP_DIR/deploy.sh not found or not executable." >&2
             echo "Bootstrap the Mac mini once (see README) before first deploy." >&2
