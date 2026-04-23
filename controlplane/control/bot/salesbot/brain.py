@@ -538,7 +538,7 @@ def check_and_handle_correction_reply(
 
         # Check if it's a valid number selection
         if reply_stripped.isdigit():
-            selected_service = pending.get_selected_service(reply_stripped)
+            selected_service: str | None = pending.get_selected_service(reply_stripped)
             if selected_service:
                 # Valid selection - send confirmation message
                 logger.info(
@@ -1197,7 +1197,8 @@ def process_message(
         profit = selling_price - cost_price
         if profit <= 0:
             logger.warning(
-                "Skipping entry with non-positive profit: service=%s selling_price=%s cost_price=%s profit=%s chat_id=%s",
+                "Skipping entry with non-positive profit: service=%s "
+                "selling_price=%s cost_price=%s profit=%s chat_id=%s",
                 service,
                 selling_price,
                 cost_price,
