@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from communicationPlane.whatsappEngine.deduplication.in_memory_store import (
+from communicationPlane.telegramEngine.deduplication.in_memory_store import (
     InMemoryDeduplicator as DevInMemoryDeduplicator,
 )
 from models import deduplication as dedup_module

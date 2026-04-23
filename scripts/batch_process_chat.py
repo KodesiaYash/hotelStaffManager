@@ -29,7 +29,7 @@ from dotenv import load_dotenv
 load_dotenv()
 load_dotenv(dotenv_path="env", override=True)
 
-from communicationPlane.whatsappEngine.whapiInterface.whapi_client import WhapiClient  # noqa: E402
+from communicationPlane.telegramEngine.telegramInterface.telegram_client import TelegramClient  # noqa: E402
 from controlplane.control.bot.salesbot.brain import (  # noqa: E402
     _coerce_quantity,
     _extract_hotel_name,
@@ -282,7 +282,7 @@ class BatchAnalyzer:
         print("\n" + "=" * 60)
 
 
-def fetch_all_messages(client: WhapiClient, chat_id: str, max_count: int = 500) -> list[dict[str, Any]]:
+def fetch_all_messages(client: TelegramClient, chat_id: str, max_count: int = 500) -> list[dict[str, Any]]:
     """Fetch messages from chat, paginating if needed."""
     all_messages: list[dict[str, Any]] = []
     offset = 0
@@ -427,7 +427,7 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    client = WhapiClient()
+    client = TelegramClient()
     analyzer = BatchAnalyzer()
 
     # Create report file early

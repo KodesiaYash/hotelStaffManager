@@ -15,9 +15,9 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from communicationPlane.whatsappEngine.engine import WhatsAppEngine  # noqa: E402
-from communicationPlane.whatsappEngine.whapiInterface.webhook import (  # noqa: E402
-    create_whapi_blueprint,
+from communicationPlane.telegramEngine.engine import TelegramEngine  # noqa: E402
+from communicationPlane.telegramEngine.telegramInterface.webhook import (  # noqa: E402
+    create_telegram_blueprint,
 )
 from controlplane.control.bot.salesbot.brain import (  # noqa: E402
     process_expired_corrections,
@@ -61,10 +61,13 @@ _expired_checker_thread.start()
 
 app = Flask(__name__)
 control_plane = ControlPlaneInterface()
-whatsapp_engine = WhatsAppEngine(control_plane)
+telegram_engine = TelegramEngine(
+    control_plane,
+    bot_user_id=os.getenv("TELEGRAM_BOT_USER_ID") or None,
+)
 app.register_blueprint(
-    create_whapi_blueprint(whatsapp_engine.process_payload),
-    url_prefix="/whapi",
+    create_telegram_blueprint(telegram_engine.process_payload),
+    url_prefix="/telegram",
 )
 
 

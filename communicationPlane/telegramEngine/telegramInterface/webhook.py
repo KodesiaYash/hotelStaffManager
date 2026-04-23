@@ -16,15 +16,26 @@ PayloadHandler = Callable[[dict[str, Any]], list[ChatMessage]]
 logger = logging.getLogger(__name__)
 
 
-def create_whapi_blueprint(handler: PayloadHandler) -> Blueprint:
-    blueprint = Blueprint("whapi_webhook", __name__)
+def _count_messages(payload: dict[str, Any]) -> int:
+    """Telegram webhooks deliver one Update per request. Batch endpoints
+    may also be used for dev/testing that wrap several updates in a list
+    under the ``updates`` or ``messages`` key."""
+    if isinstance(payload.get("updates"), list):
+        return len(payload["updates"])
+    if isinstance(payload.get("messages"), list):
+        return len(payload["messages"])
+    return 1 if payload else 0
+
+
+def create_telegram_blueprint(handler: PayloadHandler) -> Blueprint:
+    blueprint = Blueprint("telegram_webhook", __name__)
 
     def _handle_webhook() -> tuple[Any, int]:
         request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
         started = time.time()
         payload = request.get_json(silent=True) or {}
-        message_count = len(payload.get("messages") or [])
-        with LogContext(request_id=request_id, source="whapi_webhook"):
+        message_count = _count_messages(payload)
+        with LogContext(request_id=request_id, source="telegram_webhook"):
             logger.info(
                 "Webhook path=%s remote=%s messages=%d",
                 request.path,

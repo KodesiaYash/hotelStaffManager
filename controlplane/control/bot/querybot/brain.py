@@ -15,11 +15,11 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..
 if PROJECT_ROOT not in sys.path:
     sys.path.append(PROJECT_ROOT)
 
-from communicationPlane.whatsappEngine.whapiInterface.whapi_client import WhapiClient  # noqa: E402
+from communicationPlane.telegramEngine.telegramInterface.telegram_client import TelegramClient  # noqa: E402
 from controlplane.boundary.llminterface.gemini_interface import GeminiInterface  # noqa: E402
 from controlplane.boundary.storageInterface.saleCommissions import SaleCommissions  # noqa: E402
 from controlplane.boundary.storageInterface.salesAudit import SalesAudit  # noqa: E402
-from models.retry import RetryingWhapiClient  # noqa: E402
+from models.retry import RetryingTelegramClient  # noqa: E402
 
 """LLM is stateless, need to make it aware of current date and time by injecting it in the prompt"""
 current_time_str = datetime.datetime.now(datetime.UTC).isoformat()
@@ -51,7 +51,7 @@ _load_env_files()
 _sales_audit: SalesAudit | None = None
 _sale_commissions: SaleCommissions | None = None
 _llm_interface: GeminiInterface | None = None
-_reply_client: RetryingWhapiClient | None = None
+_reply_client: RetryingTelegramClient | None = None
 
 
 def _get_sales_audit() -> SalesAudit:
@@ -79,10 +79,10 @@ def _get_llm_interface() -> GeminiInterface:
     return _llm_interface
 
 
-def _get_reply_client() -> RetryingWhapiClient:
+def _get_reply_client() -> RetryingTelegramClient:
     global _reply_client
     if _reply_client is None:
-        _reply_client = RetryingWhapiClient(WhapiClient())
+        _reply_client = RetryingTelegramClient(TelegramClient())
     return _reply_client
 
 

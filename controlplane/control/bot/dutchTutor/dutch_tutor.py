@@ -11,7 +11,7 @@ from typing import Any
 
 from controlplane.boundary.llminterface.chatgpt_interface import ChatGPTInterface
 
-from communicationPlane.whatsappEngine.whapiInterface.whapi_client import WhapiClient
+from communicationPlane.telegramEngine.telegramInterface.telegram_client import TelegramClient
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(levelname)s: %(message)s")
 logger = logging.getLogger(__name__)
@@ -101,11 +101,11 @@ class DutchTutor:
     def __init__(
         self,
         chat_id: str | None = None,
-        whapi_client: WhapiClient | None = None,
+        client: TelegramClient | None = None,
         llm: ChatGPTInterface | None = None,
     ) -> None:
         self._chat_id = chat_id or os.getenv("DUTCH_TUTOR_CHAT_ID", "")
-        self._whapi = whapi_client or WhapiClient()
+        self._client = client or TelegramClient()
         self._llm = llm or ChatGPTInterface()
         self._vocab_bank: list[dict[str, Any]] = []
         self._quiz_bank: list[dict[str, Any]] = []
@@ -356,7 +356,7 @@ class DutchTutor:
         message = ("\n\n" + "─" * 30 + "\n\n").join(parts)
 
         try:
-            self._whapi.send_text(to=self._chat_id, body=message)
+            self._client.send_text(to=self._chat_id, body=message)
             logger.info("Sent %d items: %s", len(labels), ", ".join(labels))
             return True
         except Exception as exc:
@@ -436,6 +436,6 @@ class DutchTutor:
 
         try:
             if self._chat_id:
-                self._whapi.send_text(to=self._chat_id, body=result)
+                self._client.send_text(to=self._chat_id, body=result)
         except Exception as exc:
             logger.error("Failed to send response: %s", exc)
