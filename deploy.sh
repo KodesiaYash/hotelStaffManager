@@ -43,6 +43,16 @@ else
   log "Updated $BEFORE_SHA → $AFTER_SHA"
 fi
 
+# ── Re-exec self with the freshly-pulled deploy.sh ──────────────────────────
+# Bash reads scripts incrementally via the open FD, so if deploy.sh itself was
+# modified by the git reset above, the old bytes continue to execute. Re-exec
+# with the new version so any newly-added post-deploy steps actually run.
+if [ "${DEPLOY_RELOADED:-0}" != "1" ] && [ "$BEFORE_SHA" != "$AFTER_SHA" ]; then
+  log "Re-executing deploy.sh with updated version ($AFTER_SHA)"
+  export DEPLOY_RELOADED=1
+  exec bash "$APP_DIR/deploy.sh" "$@"
+fi
+
 # ── Build & restart ─────────────────────────────────────────────────────────
 log "Building image for service '$COMPOSE_SERVICE'"
 docker compose build "$COMPOSE_SERVICE"
