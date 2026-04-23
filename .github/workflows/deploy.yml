@@ -25,12 +25,12 @@ jobs:
       - name: Run deploy script
         env:
           # APP_DIR can be overridden via a repo variable; otherwise falls back
-          # to the default that deploy.sh itself uses ($HOME/apps/hotelStaffManager).
+          # to the default ($HOME/Desktop/DeploymentHost/hotelStaffManager).
           APP_DIR: ${{ vars.APP_DIR }}
           DEPLOY_BRANCH: ${{ github.event.inputs.branch || 'main' }}
         run: |
           set -euo pipefail
-          : "${APP_DIR:=$HOME/apps/hotelStaffManager}"
+          : "${APP_DIR:=$HOME/Desktop/DeploymentHost/hotelStaffManager}"
           if [ ! -x "$APP_DIR/deploy.sh" ]; then
             echo "ERROR: $APP_DIR/deploy.sh not found or not executable." >&2
             echo "Bootstrap the Mac mini once (see README) before first deploy." >&2

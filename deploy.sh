@@ -10,7 +10,7 @@
 
 set -euo pipefail
 
-APP_DIR="${APP_DIR:-$HOME/apps/hotelStaffManager}"
+APP_DIR="${APP_DIR:-$HOME/Desktop/DeploymentHost/hotelStaffManager}"
 DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 COMPOSE_SERVICE="${COMPOSE_SERVICE:-app}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:5050/health}"
