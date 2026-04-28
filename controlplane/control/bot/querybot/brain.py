@@ -4,25 +4,23 @@ import datetime
 import json
 import logging
 import os
-import sys
 from typing import Any
 
-from dotenv import load_dotenv
+from shared.env import ensure_on_sys_path, load_project_env, project_root_from
 
 logger = logging.getLogger(__name__)
 
-PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", ".."))
-if PROJECT_ROOT not in sys.path:
-    sys.path.append(PROJECT_ROOT)
+PROJECT_ROOT = project_root_from(__file__, levels_up=4)
+ensure_on_sys_path(PROJECT_ROOT)
+load_project_env(PROJECT_ROOT)
 
 from communicationPlane.telegramEngine.telegramInterface.telegram_client import TelegramClient  # noqa: E402
 from controlplane.boundary.llminterface.llm_interface import LLMInterface, get_query_bot_llm  # noqa: E402
 from controlplane.boundary.storageInterface.saleCommissions import SaleCommissions  # noqa: E402
 from controlplane.boundary.storageInterface.salesAudit import SalesAudit  # noqa: E402
+from controlplane.control.memory import get_memory_service  # noqa: E402
+from controlplane.control.memory.types import MemoryEvent, RecallRequest, utc_now  # noqa: E402
 from models.retry import RetryingTelegramClient  # noqa: E402
-
-"""LLM is stateless, need to make it aware of current date and time by injecting it in the prompt"""
-current_time_str = datetime.datetime.now(datetime.UTC).isoformat()
 
 DEFAULT_QUERY_PROMPT = (
     "You are a spreadsheet assistant for hotel sales operations. Answer the user's question using ONLY the provided "
@@ -30,24 +28,16 @@ DEFAULT_QUERY_PROMPT = (
     "- Sales audit (Test_Sales): logged sales rows with Service, Quantity, Date, Time, Guest, Room, Assignee, "
     "Selling Price, Cost Price, Hotel, and SaleID\n"
     "- Sale Commissions: commission entries with SaleId, Commission Value, Name, and Phone\n\n"
+    "Memory context may be provided from prior conversations. Use it for continuity and references, but rely on "
+    "spreadsheet data as the factual source of truth.\n\n"
     "If the answer cannot be determined from the data, say that clearly. Be concise, unless asked to elaborate. "
     "If the user asks a query which requires a sense of time, use the current date and time provided in the input. "
     "Use plain language.\n\n"
+    "Memory context:\n{memory_context}\n\n"
     "User question:\n{question}\n\n"
     "Current Date and Time: {current_time_str}\n"
     "Spreadsheet data:\n{spreadsheet_data}\n"
 )
-
-
-def _load_env_files() -> None:
-    load_dotenv()
-    env_path = os.path.join(PROJECT_ROOT, "env")
-    if os.path.exists(env_path):
-        load_dotenv(dotenv_path=env_path, override=False)
-
-
-_load_env_files()
-
 _sales_audit: SalesAudit | None = None
 _sale_commissions: SaleCommissions | None = None
 _llm_interface: LLMInterface | None = None
@@ -126,7 +116,11 @@ def build_spreadsheet_context() -> dict[str, Any]:
     return context
 
 
-def answer_query(question: str) -> str:
+def _conversation_id(chat_id: str) -> str:
+    return f"telegram:{chat_id}"
+
+
+def answer_query(question: str, *, memory_context: str = "") -> str:
     logger.debug("QueryBot building spreadsheet context")
     try:
         context = build_spreadsheet_context()
@@ -147,7 +141,8 @@ def answer_query(question: str) -> str:
     prompt = DEFAULT_QUERY_PROMPT.format(
         question=question.strip(),
         spreadsheet_data=json.dumps(context, ensure_ascii=True, default=str),
-        current_time_str=current_time_str,
+        current_time_str=datetime.datetime.now(datetime.UTC).isoformat(),
+        memory_context=memory_context or "No prior memory available.",
     )
     logger.info("QueryBot LLM prompt_len=%d question_len=%d", len(prompt), len(question))
 
@@ -169,18 +164,61 @@ def answer_query(question: str) -> str:
     return answer
 
 
-def process_message(message: str, chat_id: str) -> None:
+def process_message(
+    message: str,
+    chat_id: str,
+    sender_id: str | None = None,
+    message_id: str | None = None,
+    sender_name: str | None = None,
+) -> None:
     logger.debug("QueryBot processing message length=%d chat_id=%s", len(message or ""), chat_id)
+    memory_service = get_memory_service()
+    conversation_id = _conversation_id(chat_id)
+    recall = memory_service.recall(
+        RecallRequest(
+            bot_name="querybot",
+            conversation_id=conversation_id,
+            chat_id=chat_id,
+            query_text=message or "",
+            user_id=sender_id,
+            sender_name=sender_name,
+        )
+    )
 
     if not message or not message.strip():
         logger.warning("QueryBot received empty message chat_id=%s", chat_id)
         answer = "I received an empty message. Please send your question."
     else:
-        answer = answer_query(message)
+        memory_service.record_event(
+            MemoryEvent(
+                bot_name="querybot",
+                conversation_id=conversation_id,
+                chat_id=chat_id,
+                user_id=sender_id,
+                sender_name=sender_name,
+                role="user",
+                text=message.strip(),
+                metadata={"message_id": message_id} if message_id else {},
+            )
+        )
+        answer = answer_query(message, memory_context=recall.to_markdown())
 
     try:
         _get_reply_client().send_text(to=chat_id, body=answer)
         logger.info("QueryBot reply sent chat_id=%s answer_len=%d", chat_id, len(answer))
+        memory_service.record_event(
+            MemoryEvent(
+                bot_name="querybot",
+                conversation_id=conversation_id,
+                chat_id=chat_id,
+                user_id=sender_id,
+                sender_name=sender_name,
+                role="assistant",
+                text=answer,
+                metadata={"responded_at": utc_now().isoformat()},
+            )
+        )
+        memory_service.refresh_summary(bot_name="querybot", conversation_id=conversation_id, chat_id=chat_id)
     except Exception as exc:
         logger.error(
             "QueryBot failed to send reply error=%s chat_id=%s answer_preview=%s",

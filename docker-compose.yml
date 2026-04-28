@@ -1,6 +1,38 @@
-version: "3.8"
-
 services:
+  memory-postgres:
+    image: postgres:16-alpine
+    container_name: salesbot-memory-postgres
+    env_file:
+      - ./env
+    ports:
+      - "5432:5432"
+    volumes:
+      - memory_postgres_data:/var/lib/postgresql/data
+      - ./infrastructure/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  memory-redis:
+    image: redis:7.4-alpine
+    container_name: salesbot-memory-redis
+    env_file:
+      - ./env
+    command: ["sh", "-c", "redis-server --appendonly yes --requirepass \"$$REDIS_PASSWORD\""]
+    ports:
+      - "6379:6379"
+    volumes:
+      - memory_redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
   # ============================================
   # APPLICATION
   # ============================================
@@ -17,6 +49,11 @@ services:
       - SERVER_HOST=0.0.0.0
       - SERVER_PORT=5051
       - LOG_LEVEL=INFO
+      - MEMORY_DB_HOST=memory-postgres
+      - MEMORY_DB_PORT=5432
+      - MEMORY_DB_SSLMODE=disable
+      - MEMORY_REDIS_HOST=memory-redis
+      - MEMORY_REDIS_PORT=6379
     volumes:
       - ./logs:/app/logs
       - ./envConfig:/app/envConfig:ro
@@ -25,6 +62,11 @@ services:
       - ./controlplane:/app/controlplane:ro
       - ./models:/app/models:ro
       - ./shared:/app/shared:ro
+    depends_on:
+      memory-postgres:
+        condition: service_healthy
+      memory-redis:
+        condition: service_healthy
     restart: unless-stopped
     logging:
       driver: "json-file"
@@ -72,3 +114,7 @@ services:
     depends_on:
       - loki
     restart: unless-stopped
+
+volumes:
+  memory_postgres_data:
+  memory_redis_data:

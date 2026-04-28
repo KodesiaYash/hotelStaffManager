@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import logging
 import os
-import subprocess
 import sys
 import threading
 import time
@@ -85,6 +84,14 @@ def _server_port() -> int:
     return int(port_raw)
 
 
+def _read_last_log_lines(path: str, line_count: int) -> list[str]:
+    if line_count <= 0:
+        return []
+    with open(path, encoding="utf-8") as log_file:
+        lines = log_file.readlines()
+    return lines[-line_count:]
+
+
 def _build_local_message(text: str) -> ChatMessage:
     return ChatMessage(
         message_id=f"local:{uuid.uuid4()}",
@@ -137,47 +144,34 @@ def health() -> tuple[Any, int]:
 
 @app.route("/logs", methods=["GET"])
 def logs() -> tuple[Any, int]:
-    """Get docker compose logs for all services or a specific service."""
+    """Get recent application logs from the local JSON log file."""
     logger.info("HTTP /logs called from %s", request.remote_addr)
 
-    service = request.args.get("service")
     tail = request.args.get("tail", "100")
-    since = request.args.get("since")
 
     try:
-        cmd = ["docker", "compose", "logs"]
+        tail_count = int(tail)
+        app_log_path = os.getenv("APP_LOG_PATH") or os.path.join(PROJECT_ROOT, "logs", "app.jsonl")
+        if not os.path.isabs(app_log_path):
+            app_log_path = os.path.join(PROJECT_ROOT, app_log_path)
 
-        if tail:
-            cmd.extend(["--tail", str(tail)])
+        if not os.path.exists(app_log_path):
+            logger.warning("HTTP /logs missing log file path=%s", app_log_path)
+            return jsonify({"error": f"log file not found: {app_log_path}"}), 404
 
-        if since:
-            cmd.extend(["--since", since])
-
-        if service:
-            cmd.append(service)
-
-        result = subprocess.run(
-            cmd,
-            cwd=PROJECT_ROOT,
-            capture_output=True,
-            text=True,
-            timeout=30,
-        )
+        lines = _read_last_log_lines(app_log_path, tail_count)
 
         return jsonify(
             {
                 "status": "success",
-                "logs": result.stdout,
-                "stderr": result.stderr,
-                "returncode": result.returncode,
+                "log_path": app_log_path,
+                "tail": tail_count,
+                "logs": "".join(lines),
             }
         ), 200
-    except subprocess.TimeoutExpired:
-        logger.error("HTTP /logs timeout")
-        return jsonify({"error": "Command timeout"}), 504
-    except FileNotFoundError:
-        logger.error("HTTP /logs docker compose not found")
-        return jsonify({"error": "docker compose not found"}), 500
+    except ValueError:
+        logger.warning("HTTP /logs invalid tail=%s", tail)
+        return jsonify({"error": "tail must be a valid integer"}), 400
     except Exception as exc:
         logger.error("HTTP /logs failed: %s", exc, exc_info=True)
         return jsonify({"error": str(exc)}), 500

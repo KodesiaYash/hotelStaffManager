@@ -1,0 +1,20 @@
+#!/usr/bin/env sh
+set -eu
+
+SCHEMA_NAME="${MEMORY_DB_SCHEMA:-memory}"
+APP_USER="${MEMORY_DB_USER:-$POSTGRES_USER}"
+
+psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname "$POSTGRES_DB" <<SQL
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
+
+DO \$\$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_namespace WHERE nspname = '${SCHEMA_NAME}') THEN
+        EXECUTE format('CREATE SCHEMA %I AUTHORIZATION %I', '${SCHEMA_NAME}', '${APP_USER}');
+    END IF;
+END
+\$\$;
+
+ALTER ROLE "${APP_USER}" SET search_path TO "${SCHEMA_NAME}", public;
+GRANT ALL ON SCHEMA "${SCHEMA_NAME}" TO "${APP_USER}";
+SQL

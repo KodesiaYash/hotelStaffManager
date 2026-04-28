@@ -120,7 +120,10 @@ class SalesAudit:
         return float(cost_price)
 
     def validate_service(
-        self, service: str, threshold: float = 0.6
+        self,
+        service: str,
+        threshold: float = 0.6,
+        llm: LLMClient | None = None,
     ) -> tuple[bool, str | None, list[tuple[str, float]]]:
         """Validate if a service exists in the pricelist.
 
@@ -141,7 +144,7 @@ class SalesAudit:
         if not records:
             return True, service, []  # Empty pricelist, allow anything
 
-        return service_exists_in_pricelist(service, records, threshold)
+        return service_exists_in_pricelist(service, records, threshold, llm=llm)
 
     def read_costs_sheet(self) -> list[dict[str, Any]]:
         if not self.pricelist:
@@ -320,7 +323,22 @@ def _llm_match_service(service_value: str, records: list[dict[str, Any]], llm: L
     )
     top_candidates = scored[:20]
     prompt = (
-        "You are matching a service name to a price list. "
+        "You are matching a rough service name written by hotel staff to a price list. "
+        "Do not require an exact full-string match. Staff may use shorthand, partial names, phonetic spellings, "
+        "misspellings, broken English, or low-literacy wording. "
+        "Choose the single best candidate only when it clearly represents the intended core service. "
+        "Prefer the simple/base service over bundle or combo services "
+        "unless the rough input explicitly mentions the extras. "
+        "Avoid matching to unrelated bundled services just because they share one word.\n"
+        "Examples:\n"
+        "- If the staff writes `hammam` and candidates include a plain/one-hour hammam option "
+        "and `hammam + massage`, choose the plain hammam option.\n"
+        "- If the staff writes `massage` and candidates include a plain/one-hour massage option "
+        "and `hammam + massage`, choose the plain massage option.\n"
+        "- If the staff writes `dinner`, prefer a normal dinner candidate and do not choose "
+        "something like `quad + dinner` unless `quad` is also mentioned.\n"
+        "- If the staff writes `trans` or `trans to airport`, match it to `transfer to airport`.\n"
+        "- Understand short forms and common mistakes from less-educated writers.\n"
         'Return ONLY JSON: {"match": "<exact candidate or empty>", "confidence": "high|medium|low"}.\n\n'
         f'Service to match: "{service_value}"\n'
         f"Candidates: {top_candidates}\n"
@@ -377,7 +395,10 @@ def find_nearest_services(service_value: str, records: list[dict[str, Any]], top
 
 
 def service_exists_in_pricelist(
-    service_value: str, records: list[dict[str, Any]], threshold: float = 0.6
+    service_value: str,
+    records: list[dict[str, Any]],
+    threshold: float = 0.6,
+    llm: LLMClient | None = None,
 ) -> tuple[bool, str | None, list[tuple[str, float]]]:
     """Check if a service exists in the pricelist.
 
@@ -415,8 +436,19 @@ def service_exists_in_pricelist(
     if len(substring_matches) == 1:
         return True, substring_matches[0], []
 
-    # If multiple substring matches, return them as suggestions with high scores
+    # If multiple substring matches, let the LLM choose the best plain/base service before
+    # asking the user to disambiguate.
     if len(substring_matches) > 1:
+        if llm:
+            narrowed_records = [
+                row
+                for row in records
+                if (row_service := _get_case_insensitive(row, ["service", "item", "name"]))
+                and str(row_service).strip() in substring_matches
+            ]
+            matched_name = _llm_match_service(service_value, narrowed_records, llm)
+            if matched_name:
+                return True, matched_name, []
         # Return as suggestions so user can choose
         suggestions = [(name, 0.95) for name in substring_matches]
         return False, None, suggestions
@@ -426,8 +458,23 @@ def service_exists_in_pricelist(
 
     # Check if any are above threshold
     good_matches = [(name, score) for name, score in nearest if score >= threshold]
+    if good_matches and llm:
+        narrowed_records = [
+            row
+            for row in records
+            if (row_service := _get_case_insensitive(row, ["service", "item", "name"]))
+            and str(row_service).strip() in {name for name, _score in good_matches}
+        ]
+        matched_name = _llm_match_service(service_value, narrowed_records, llm)
+        if matched_name:
+            return True, matched_name, []
     if good_matches:
         return False, None, good_matches
+
+    if llm:
+        matched_name = _llm_match_service(service_value, records, llm)
+        if matched_name:
+            return True, matched_name, []
 
     # No good matches at all
     return False, None, nearest
