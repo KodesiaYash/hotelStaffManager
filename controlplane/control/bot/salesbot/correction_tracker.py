@@ -1,6 +1,6 @@
 """Track pending corrections for SalesBot validation failures.
 
-This module maintains a mapping of chat_id -> pending correction requests,
+This module maintains a mapping of per-user conversation thread -> pending correction requests,
 allowing users to reply with corrected information that gets merged with
 the original extraction.
 """
@@ -52,25 +52,136 @@ class PendingCorrection:
     def get_selected_service(self, reply: str) -> str | None:
         """Parse user reply to get selected service.
 
-        If reply is a number 1-5, return the corresponding suggestion.
-        Otherwise return None (reply should be treated as a service name).
+        Accept simple ordinal replies such as 1, first, second, last, etc.
         """
-        reply = reply.strip()
-        if not reply.isdigit():
+        reply = reply.strip().lower()
+        if not reply:
             return None
 
-        index = int(reply) - 1  # Convert to 0-indexed
+        ordinal_map = {
+            "first": 0,
+            "1st": 0,
+            "one": 0,
+            "second": 1,
+            "2nd": 1,
+            "two": 1,
+            "third": 2,
+            "3rd": 2,
+            "three": 2,
+            "fourth": 3,
+            "4th": 3,
+            "four": 3,
+            "fifth": 4,
+            "5th": 4,
+            "five": 4,
+            "last": len(self.service_suggestions) - 1,
+        }
+
+        index = int(reply) - 1 if reply.isdigit() else ordinal_map.get(reply, -1)
         if 0 <= index < len(self.service_suggestions):
             return self.service_suggestions[index][0]
-
-        # Invalid number (e.g., "6" when only 5 suggestions)
         return None
+
+    def resolve_service_reply(self, reply: str) -> str | None:
+        reply_stripped = reply.strip()
+        if not reply_stripped:
+            return None
+
+        selected_service = self.get_selected_service(reply_stripped)
+        if selected_service:
+            return selected_service
+
+        reply_lower = reply_stripped.lower()
+        cleaned_reply = _strip_reply_prefixes(reply_lower)
+        for service_name, _ in self.service_suggestions:
+            service_lower = service_name.lower()
+            if cleaned_reply == service_lower or cleaned_reply in service_lower or service_lower in cleaned_reply:
+                return service_name
+
+        return _llm_resolve_service_reply(
+            original_service=str(self.extracted_data.get("Service", "") or ""),
+            user_reply=reply_stripped,
+            suggestions=self.service_suggestions,
+        )
+
+
+def _strip_reply_prefixes(reply: str) -> str:
+    cleaned = " ".join(reply.split())
+    prefixes = [
+        "i meant ",
+        "meant ",
+        "it was ",
+        "its ",
+        "it's ",
+        "service is ",
+        "service was ",
+        "maybe ",
+        "probably ",
+        "the service is ",
+        "the first one is ",
+        "the second one is ",
+    ]
+    for prefix in prefixes:
+        if cleaned.startswith(prefix):
+            cleaned = cleaned[len(prefix) :].strip()
+            break
+    return cleaned
+
+
+def _llm_resolve_service_reply(
+    *,
+    original_service: str,
+    user_reply: str,
+    suggestions: list[tuple[str, float]],
+) -> str | None:
+    if not suggestions:
+        return None
+    try:
+        from controlplane.control.bot.salesbot.dependencies import get_llm_interface
+
+        llm = get_llm_interface()
+    except Exception:
+        return None
+
+    suggestion_names = [name for name, _ in suggestions]
+    prompt = (
+        "You are helping a hotel sales assistant understand a user's correction reply. "
+        "The user may be informal, low-literacy, use shorthand, broken English, or partial names. "
+        "Pick the single best matching service suggestion only if the user's reply clearly points to one of them. "
+        "Understand replies like `hammam`, `first option`, `1`, `I meant massage`, or short forms. "
+        'Return ONLY JSON: {"match": "<one exact suggestion or empty>", "confidence": "high|medium|low"}.\n\n'
+        f'Original extracted service: "{original_service}"\n'
+        f'User reply: "{user_reply}"\n'
+        f"Suggestions: {suggestion_names}\n"
+    )
+
+    try:
+        response = llm.generate(prompt)
+    except Exception:
+        return None
+
+    try:
+        import json
+
+        data = json.loads(response.strip())
+    except Exception:
+        return None
+
+    match = str(data.get("match") or "").strip()
+    confidence = str(data.get("confidence") or "").strip().lower()
+    if not match or confidence == "low":
+        return None
+
+    for suggestion_name in suggestion_names:
+        if suggestion_name.lower() == match.lower():
+            return suggestion_name
+    return None
 
 
 class CorrectionTracker:
     """Thread-safe tracker for pending corrections.
 
-    Maintains a mapping of chat_id -> PendingCorrection so that when a user
+    Maintains a mapping of per-user conversation thread -> PendingCorrection so that when a user
     replies to a correction request, we can match it to the original extraction.
     """
 
@@ -104,8 +215,9 @@ class CorrectionTracker:
     ) -> PendingCorrection:
         """Add a new pending correction request."""
         with self._data_lock:
+            key = self._thread_key(chat_id, sender_id)
             # Check if there's an existing pending correction for this chat
-            existing = self._pending.get(chat_id)
+            existing = self._pending.get(key)
             if existing and not existing.is_expired():
                 # Increment attempt count for retry
                 existing.attempt_count += 1
@@ -132,25 +244,27 @@ class CorrectionTracker:
                 service_suggestions=service_suggestions or [],
                 original_message_id=original_message_id,
             )
-            self._pending[chat_id] = correction
+            self._pending[key] = correction
             logger.info("Added pending correction for chat_id=%s", chat_id)
             return correction
 
-    def get_pending(self, chat_id: str) -> PendingCorrection | None:
+    def get_pending(self, chat_id: str, sender_id: str | None = None) -> PendingCorrection | None:
         """Get pending correction for a chat, if any."""
         with self._data_lock:
-            correction = self._pending.get(chat_id)
+            key = self._thread_key(chat_id, sender_id)
+            correction = self._pending.get(key)
             if correction and correction.is_expired():
-                del self._pending[chat_id]
+                del self._pending[key]
                 logger.debug("Expired pending correction for chat_id=%s", chat_id)
                 return None
             return correction
 
-    def remove_pending(self, chat_id: str) -> bool:
+    def remove_pending(self, chat_id: str, sender_id: str | None = None) -> bool:
         """Remove a pending correction (after successful processing)."""
         with self._data_lock:
-            if chat_id in self._pending:
-                del self._pending[chat_id]
+            key = self._thread_key(chat_id, sender_id)
+            if key in self._pending:
+                del self._pending[key]
                 logger.info("Removed pending correction for chat_id=%s", chat_id)
                 return True
             return False
@@ -169,6 +283,10 @@ class CorrectionTracker:
         """Remove all expired corrections. Returns count removed."""
         expired = self.get_and_remove_expired()
         return len(expired)
+
+    @staticmethod
+    def _thread_key(chat_id: str, sender_id: str | None) -> str:
+        return f"{chat_id}:{sender_id or 'unknown'}"
 
 
 def get_correction_tracker() -> CorrectionTracker:
@@ -228,19 +346,20 @@ def build_service_suggestion_prompt(
     service_name: str,
     suggestions: list[tuple[str, float]],
 ) -> str:
-    """Build a message asking user to select from suggested services."""
+    """Build a friendly message asking what the user meant."""
     lines = [
-        f"⚠️ *Service '{service_name}' not found in price list.*\n",
-        "*Did you mean one of these?*\n",
+        f"Hey, I couldn't fully understand the service *{service_name}*.\n",
+        "What did you mean by this?\n",
+        "Possible suggestions are:\n",
     ]
 
     for i, (name, score) in enumerate(suggestions, 1):
-        # Show percentage match
         pct = int(score * 100)
         lines.append(f"{i}. {name} ({pct}% match)")
 
-    max_num = len(suggestions)
-    lines.append(f"\n*Please reply with the correct service name or number (1-{max_num}).*")
+    lines.append(
+        "\nYou can reply naturally, for example: `I meant hammam`, `hammam`, `first option`, or `1`."
+    )
 
     return "\n".join(lines)
 
@@ -256,12 +375,10 @@ def build_invalid_selection_message(
     reply: str,
     suggestions: list[tuple[str, float]],
 ) -> str:
-    """Build a message when user selects an invalid option."""
-    max_num = len(suggestions)
+    """Build a message when the reply still cannot be understood."""
     lines = [
-        f"❌ *'{reply}' is not a valid selection.*\n",
-        f"*Please reply with a number from 1-{max_num}, or type the correct service name.*\n",
-        "*Available options:*",
+        f"I still couldn't understand what you meant by `{reply}`.\n",
+        "These were the closest options I found:",
     ]
 
     for i, (name, _) in enumerate(suggestions, 1):
@@ -271,8 +388,12 @@ def build_invalid_selection_message(
 
 
 def build_final_escalation_message() -> str:
-    """Build a message when user has failed too many times - tell them to contact Omar."""
-    return "❌ *Information is incorrect.*\n\nAdmin has been alerted. Please contact *Omar* for more details."
+    """Build a user-facing message when SalesBot could not recover the sale."""
+    return "I could not record your sale. Please contact *Omar* to add the details."
+
+
+def build_entry_recorded_message() -> str:
+    return "Thank you, your entry has been recorded."
 
 
 def build_timeout_escalation_message(

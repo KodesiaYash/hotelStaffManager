@@ -15,6 +15,7 @@ DEPLOY_BRANCH="${DEPLOY_BRANCH:-main}"
 COMPOSE_SERVICE="${COMPOSE_SERVICE:-app}"
 HEALTH_URL="${HEALTH_URL:-http://127.0.0.1:5050/health}"
 HEALTH_TIMEOUT_SECONDS="${HEALTH_TIMEOUT_SECONDS:-60}"
+DATABASE_SERVICES=(${DATABASE_SERVICES:-memory-postgres memory-redis})
 
 log() { printf '[deploy %s] %s\n' "$(date +%H:%M:%S)" "$*"; }
 fail() { printf '[deploy ERROR] %s\n' "$*" >&2; exit 1; }
@@ -54,6 +55,9 @@ if [ "${DEPLOY_RELOADED:-0}" != "1" ] && [ "$BEFORE_SHA" != "$AFTER_SHA" ]; then
 fi
 
 # ── Build & restart ─────────────────────────────────────────────────────────
+log "Starting database services: ${DATABASE_SERVICES[*]}"
+docker compose up -d "${DATABASE_SERVICES[@]}"
+
 log "Building image for service '$COMPOSE_SERVICE'"
 docker compose build "$COMPOSE_SERVICE"
 

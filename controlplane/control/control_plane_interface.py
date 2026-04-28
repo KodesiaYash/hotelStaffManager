@@ -15,7 +15,14 @@ SalesBotHandler = Callable[[str, str | None, str | None, str | None, str | None]
 
 
 class QueryBotHandler(Protocol):
-    def __call__(self, message: str, chat_id: str) -> None: ...
+    def __call__(
+        self,
+        message: str,
+        chat_id: str,
+        sender_id: str | None = None,
+        message_id: str | None = None,
+        sender_name: str | None = None,
+    ) -> None: ...
 
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
@@ -111,7 +118,13 @@ class ControlPlaneInterface:
             else:
                 logger.info("Routing to QueryBot chat_id=%s", message.chat_id)
                 try:
-                    self._query_bot_handler(message.text, message.chat_id)
+                    self._query_bot_handler(
+                        message.text,
+                        message.chat_id,
+                        message.sender_id,
+                        message.message_id,
+                        message.sender_name,
+                    )
                 except Exception as exc:
                     logger.error(
                         "QueryBot handler failed error=%s chat_id=%s message_preview=%s",
