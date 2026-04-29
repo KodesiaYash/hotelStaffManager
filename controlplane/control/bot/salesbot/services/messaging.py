@@ -112,6 +112,14 @@ def send_escalation(
     original_message: str,
     validation_failures: list[str],
 ) -> bool:
+    notification_client = get_notification_client()
+    if notification_client and chat_id:
+        user_message = _address_user_message(build_final_escalation_message(), sender_name)
+        try:
+            notification_client.send_text(to=chat_id, body=user_message)
+            logger.info("Sent escalation user message to chat_id=%s", chat_id)
+        except Exception as exc:
+            logger.error("Failed to send escalation user message to chat_id=%s: %s", chat_id, exc, exc_info=True)
     message = build_escalation_message(original_message, validation_failures, sender_name)
     return send_escalation_to_all(message)
 

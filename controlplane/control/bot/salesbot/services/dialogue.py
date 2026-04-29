@@ -42,15 +42,15 @@ def build_correction_request_message(
     )
     prompt = (
         "You are SalesBot speaking to hotel staff over WhatsApp. "
-        "Write a short, warm, human-sounding message asking the user to clarify missing or incorrect sale details. "
+        "Write a short, warm, human-sounding message asking the user to provide the missing booking details. "
         "Do not sound like a form, template, or machine. "
-        "Do not ask them to fill a rigid format unless absolutely necessary. "
-        "Ask only for the fields that are actually missing or wrong. "
         "Keep it concise and practical.\n\n"
+        "STRICT RULE: Ask ONLY about the exact fields listed in 'Validation failures' below. "
+        "Do NOT add, infer, or mention any other fields — even if the extracted data looks incomplete. "
+        "The validation failures list is the single authoritative source of what is missing.\n\n"
         "Recent operating context:\n"
         f"{memory_context}\n\n"
-        f"Validation failures: {validation_failures}\n"
-        f"Current extracted data: {json.dumps(extracted_data, ensure_ascii=True)}\n\n"
+        f"Validation failures (the ONLY fields to ask about): {validation_failures}\n\n"
         "Return only the WhatsApp message text."
     )
     return _generate_text(prompt, fallback)
