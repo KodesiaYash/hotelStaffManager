@@ -288,25 +288,21 @@ def is_sales_message(message: str) -> bool:
         "riad persephone",
         "roxanne",
         "persephone",
+        "persephon",
+        "riad roxann",
+        "roxann",
     ]
     if any(identifier in message_lower for identifier in riad_identifiers):
         return True
 
-    sales_field_patterns = [
-        "service:",
-        "service :",
-        "date:",
-        "date :",
-        "time:",
-        "time :",
-        "room:",
-        "room :",
-        "guest:",
-        "guest :",
-        "quantity:",
-        "quantity :",
-        "qty:",
-        "qty :",
+    sales_field_keywords = [
+        "service",
+        "date",
+        "time",
+        "room",
+        "guest",
+        "quantity",
+        "qty",
     ]
-    field_count = sum(1 for pattern in sales_field_patterns if pattern in message_lower)
-    return field_count >= 3
+    field_count = sum(1 for kw in sales_field_keywords if kw in message_lower)
+    return field_count >= 2
