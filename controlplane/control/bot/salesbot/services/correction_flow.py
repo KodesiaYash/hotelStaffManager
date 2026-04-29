@@ -163,6 +163,7 @@ def check_and_handle_correction_reply(
             corrected_entry = dict(pending.extracted_data)
             corrected_entry["Service"] = selected_service
             corrected_entry["confidence"] = "high"
+            result_details: dict[str, Any] = {}
             recorded = process_message_fn(
                 pending.original_message,
                 sender_id,
@@ -170,6 +171,7 @@ def check_and_handle_correction_reply(
                 message_id=pending.original_message_id,
                 sender_name=sender_name,
                 extracted_override=corrected_entry,
+                result_details=result_details,
             )
             if recorded:
                 send_entry_recorded_confirmation(
@@ -179,7 +181,20 @@ def check_and_handle_correction_reply(
                     quoted_message_id=pending.original_message_id,
                 )
             else:
-                send_final_escalation(chat_id, pending.sender_id, pending.sender_name, pending.original_message)
+                reason_code = result_details.get("reason_code")
+                reason_details = {
+                    k: result_details[k]
+                    for k in ("service", "selling_price", "cost_price", "profit", "quantity")
+                    if k in result_details
+                } or None
+                send_final_escalation(
+                    chat_id,
+                    pending.sender_id,
+                    pending.sender_name,
+                    pending.original_message,
+                    reason_code=reason_code,
+                    reason_details=reason_details,
+                )
             return True
 
         pending.attempt_count += 1
