@@ -166,7 +166,7 @@ def check_and_handle_correction_reply(
             recorded = process_message_fn(
                 pending.original_message,
                 sender_id,
-                chat_id=chat_id,
+                chat_id=None,
                 message_id=pending.original_message_id,
                 sender_name=sender_name,
                 extracted_override=corrected_entry,
