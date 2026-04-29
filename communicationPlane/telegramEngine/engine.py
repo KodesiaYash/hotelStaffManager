@@ -95,7 +95,8 @@ class TelegramEngine:
                 chat_name=telegram_message.chat_title,
                 sender_id=telegram_message.from_id,
                 sender_name=telegram_message.from_name,
-                source="telegram",
+                source="app",
+                transport="telegram",
             ):
                 if self._is_from_self(telegram_message):
                     logger.info("Skipping message from self")

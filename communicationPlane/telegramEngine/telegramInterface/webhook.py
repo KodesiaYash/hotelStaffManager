@@ -35,7 +35,7 @@ def create_telegram_blueprint(handler: PayloadHandler) -> Blueprint:
         started = time.time()
         payload = request.get_json(silent=True) or {}
         message_count = _count_messages(payload)
-        with LogContext(request_id=request_id, source="telegram_webhook"):
+        with LogContext(request_id=request_id, source="app", transport="telegram_webhook"):
             logger.info(
                 "Webhook path=%s remote=%s messages=%d",
                 request.path,

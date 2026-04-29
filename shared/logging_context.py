@@ -17,6 +17,7 @@ _CONTEXT_VARS: dict[str, contextvars.ContextVar[str | None]] = {
     "sender_name": contextvars.ContextVar("sender_name", default=None),
     "request_id": contextvars.ContextVar("request_id", default=None),
     "source": contextvars.ContextVar("source", default=None),
+    "transport": contextvars.ContextVar("transport", default=None),
 }
 
 _LOGGING_CONFIGURED = False
@@ -25,6 +26,7 @@ _ABS_PROJECT_ROOT = os.path.realpath(_PROJECT_ROOT)
 _DEFAULT_LOW_CONF_PATH = os.path.join(_PROJECT_ROOT, "logs", "low_confidence.jsonl")
 _DEFAULT_MEDIUM_CONF_PATH = os.path.join(_PROJECT_ROOT, "logs", "medium_confidence.jsonl")
 _DEFAULT_ERROR_PATH = os.path.join(_PROJECT_ROOT, "logs", "error.jsonl")
+_DEFAULT_SOURCE = "app"
 
 
 def _current_context() -> dict[str, str]:
@@ -65,6 +67,7 @@ class LogContext:
     sender_name: str | None = None
     request_id: str | None = None
     source: str | None = None
+    transport: str | None = None
     _tokens: dict[str, contextvars.Token] | None = None
 
     def __enter__(self) -> LogContext:
@@ -76,6 +79,7 @@ class LogContext:
             sender_name=self.sender_name,
             request_id=self.request_id,
             source=self.source,
+            transport=self.transport,
         )
         return self
 
@@ -92,11 +96,37 @@ class JsonFormatter(logging.Formatter):
             "level": record.levelname,
             "logger": record.name,
             "message": message,
+            "source": _DEFAULT_SOURCE,
         }
         payload.update(_current_context())
+        payload.update(_record_extras(record))
         if record.exc_info:
             payload["exception"] = self.formatException(record.exc_info)
         return json.dumps(payload, ensure_ascii=False)
+
+
+_RESERVED_LOG_RECORD_ATTRS = frozenset(vars(logging.LogRecord("", 0, "", 0, "", (), None)).keys())
+
+
+def _record_extras(record: logging.LogRecord) -> dict[str, Any]:
+    extras: dict[str, Any] = {}
+    for key, value in record.__dict__.items():
+        if key in _RESERVED_LOG_RECORD_ATTRS or key.startswith("_"):
+            continue
+        extras[key] = _normalize_json_value(value)
+    return extras
+
+
+def _normalize_json_value(value: Any) -> Any:
+    if value is None or isinstance(value, str | int | float | bool):
+        return value
+    if isinstance(value, dict):
+        return {str(key): _normalize_json_value(item) for key, item in value.items()}
+    if isinstance(value, list | tuple | set):
+        return [_normalize_json_value(item) for item in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    return str(value)
 
 
 _DEFAULT_APP_LOG_PATH = os.path.join(_PROJECT_ROOT, "logs", "app.jsonl")
@@ -143,8 +173,9 @@ def log_low_confidence(payload: dict[str, Any]) -> None:
     _ensure_parent_dir(path)
     entry = {
         "timestamp": datetime.now(UTC).isoformat(),
+        "source": _DEFAULT_SOURCE,
         **_current_context(),
-        **payload,
+        **_normalize_json_value(payload),
     }
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")
@@ -157,8 +188,9 @@ def log_medium_confidence(payload: dict[str, Any]) -> None:
     _ensure_parent_dir(path)
     entry = {
         "timestamp": datetime.now(UTC).isoformat(),
+        "source": _DEFAULT_SOURCE,
         **_current_context(),
-        **payload,
+        **_normalize_json_value(payload),
     }
     with open(path, "a", encoding="utf-8") as f:
         f.write(json.dumps(entry, ensure_ascii=False) + "\n")

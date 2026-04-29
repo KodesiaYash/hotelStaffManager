@@ -126,7 +126,8 @@ def process() -> tuple[Any, int]:
             chat_id=chat_message.chat_id,
             chat_name="local",
             sender_id=chat_message.sender_id,
-            source=chat_message.source,
+            source="app",
+            transport=chat_message.source,
         ):
             logger.info("Dispatching local message")
             control_plane.process(chat_message)
