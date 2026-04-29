@@ -34,14 +34,23 @@ scrape_configs:
             sender_id: sender_id
             sender_name: sender_name
             source: source
+            transport: transport
             event: event
             confidence: confidence
+            db: db
+            operation: operation
+            entity: entity
+            action: action
 
       # Extract labels for efficient querying
       - labels:
           level:
           logger:
           source:
+          transport:
+          db:
+          operation:
+          entity:
           chat_id:
           sender_id:
           sender_name:

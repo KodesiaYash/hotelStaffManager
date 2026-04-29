@@ -8,6 +8,7 @@ from datetime import datetime
 from redis import Redis
 
 from controlplane.control.memory.types import MemoryEvent, utc_now
+from shared.logging_context import LogContext
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +48,16 @@ class RedisWorkingMemoryStore:
         pipe.rpush(key, json.dumps(payload))
         pipe.ltrim(key, -max_events, -1)
         pipe.execute()
+        self._log_redis_operation(
+            operation="create",
+            entity="working_memory",
+            action="append_event",
+            key=key,
+            bot_name=event.bot_name,
+            conversation_id=event.conversation_id,
+            chat_id=event.chat_id,
+            max_events=max_events,
+        )
 
     def list_recent_events(self, *, bot_name: str, conversation_id: str, limit: int) -> list[MemoryEvent]:
         key = self._key(bot_name, conversation_id)
@@ -77,7 +88,33 @@ class RedisWorkingMemoryStore:
                 )
             except Exception as exc:
                 logger.warning("Failed to decode working memory event: %s", exc)
+        self._log_redis_operation(
+            operation="read",
+            entity="working_memory",
+            action="list_recent_events",
+            key=key,
+            bot_name=bot_name,
+            conversation_id=conversation_id,
+            limit=limit,
+            result_count=len(events),
+        )
         return events
 
     def _key(self, bot_name: str, conversation_id: str) -> str:
         return f"memory:working:{bot_name}:{conversation_id}"
+
+    def _log_redis_operation(self, *, operation: str, entity: str, action: str, **details: object) -> None:
+        with LogContext(source="redis"):
+            logger.info(
+                "Redis working memory operation action=%s entity=%s operation=%s",
+                action,
+                entity,
+                operation,
+                extra={
+                    "db": "redis",
+                    "operation": operation,
+                    "entity": entity,
+                    "action": action,
+                    **{key: value for key, value in details.items() if value is not None},
+                },
+            )

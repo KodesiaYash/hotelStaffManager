@@ -10,6 +10,7 @@ from psycopg import Connection, connect
 from psycopg.rows import dict_row
 
 from controlplane.control.memory.types import MemoryEvent, MemoryItem
+from shared.logging_context import LogContext
 
 logger = logging.getLogger(__name__)
 
@@ -129,6 +130,15 @@ class PostgresMemoryStore:
                     "created_at": event.created_at,
                 },
             )
+            self._log_sql_operation(
+                operation="create",
+                entity="memory_events",
+                action="append_event",
+                conversation_id=event.conversation_id,
+                chat_id=event.chat_id,
+                bot_name=event.bot_name,
+                row_count=cur.rowcount,
+            )
 
     def list_recent_events(self, *, bot_name: str, conversation_id: str, limit: int) -> list[MemoryEvent]:
         self.initialize()
@@ -148,6 +158,15 @@ class PostgresMemoryStore:
                 },
             )
             rows = list(reversed(cur.fetchall()))
+        self._log_sql_operation(
+            operation="read",
+            entity="memory_events",
+            action="list_recent_events",
+            conversation_id=conversation_id,
+            bot_name=bot_name,
+            result_count=len(rows),
+            limit=limit,
+        )
         return [self._event_from_row(row) for row in rows]
 
     def save_item(self, item: MemoryItem) -> None:
@@ -203,6 +222,17 @@ class PostgresMemoryStore:
                     "expires_at": item.expires_at,
                 },
             )
+            self._log_sql_operation(
+                operation="update",
+                entity="memory_items",
+                action="save_item",
+                conversation_id=item.scope_id if item.scope_type == "conversation" else None,
+                bot_name=item.created_by_bot,
+                memory_id=item.memory_id,
+                layer=item.layer,
+                scope_id=item.scope_id,
+                row_count=cur.rowcount,
+            )
 
     def list_items(
         self,
@@ -237,6 +267,17 @@ class PostgresMemoryStore:
                 },
             )
             rows = cur.fetchall()
+        self._log_sql_operation(
+            operation="read",
+            entity="memory_items",
+            action="list_items",
+            reader=reader,
+            layers=layers,
+            scope_ids=scope_ids,
+            result_count=len(rows),
+            limit=limit,
+            only_active=only_active,
+        )
         return [self._item_from_row(row) for row in rows]
 
     def close_task(
@@ -272,6 +313,32 @@ class PostgresMemoryStore:
                     "bot_name": bot_name,
                     "conversation_id": conversation_id,
                     "task_title": task_type,
+                },
+            )
+            self._log_sql_operation(
+                operation="update",
+                entity="memory_items",
+                action="close_task",
+                conversation_id=conversation_id,
+                bot_name=bot_name,
+                task_type=task_type,
+                status=status,
+                row_count=cur.rowcount,
+            )
+
+    def _log_sql_operation(self, *, operation: str, entity: str, action: str, **details: Any) -> None:
+        with LogContext(source="sql"):
+            logger.info(
+                "Postgres memory operation action=%s entity=%s operation=%s",
+                action,
+                entity,
+                operation,
+                extra={
+                    "db": "postgres",
+                    "operation": operation,
+                    "entity": entity,
+                    "action": action,
+                    **{key: value for key, value in details.items() if value is not None},
                 },
             )
 
