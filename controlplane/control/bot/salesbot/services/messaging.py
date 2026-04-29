@@ -264,6 +264,9 @@ def send_final_escalation(
     sender_id: str | None,
     sender_name: str | None,
     original_message: str,
+    *,
+    reason_code: str | None = None,
+    reason_details: dict[str, Any] | None = None,
 ) -> bool:
     notification_client = get_notification_client()
     if notification_client is None:
@@ -287,18 +290,31 @@ def send_final_escalation(
             chat_id,
             sender_id=sender_id,
             status="escalated",
-            resolution_note="User exhausted correction attempts and was escalated.",
+            resolution_note=f"Escalated after record failure reason={reason_code or 'unknown'}.",
         )
     except Exception as exc:
         logger.error("Failed to send final escalation to user: %s", exc, exc_info=True)
 
     if ESCALATION_CHAT_IDS:
+        if reason_code == "non_positive_profit":
+            reason_label = "Negative/Zero Profit"
+            reason_note = "The service could not be recorded because the profit was zero or negative."
+        elif reason_code == "zero_price":
+            reason_label = "Zero/Missing Price"
+            reason_note = "The service could not be recorded because some price information was missing or zero."
+        else:
+            reason_label = "Repeated Invalid Input"
+            reason_note = "The sale could not be completed automatically."
+        details_str = ""
+        if reason_details:
+            details_str = "\n".join(f"*{k}:* {v}" for k, v in reason_details.items())
         admin_message = (
-            "🚨 *SalesBot Escalation - Repeated Invalid Input*\n\n"
+            f"🚨 *SalesBot Escalation - {reason_label}*\n\n"
             f"*User:* {sender_name or 'Unknown'}\n\n"
             "*Original Message:*\n"
             f"```\n{original_message[:500]}\n```\n\n"
-            "_User failed to provide valid input after multiple attempts._"
+            f"_{reason_note}_"
+            + (f"\n\n*Details:*\n{details_str}" if details_str else "")
         )
         send_escalation_to_all(admin_message)
 
