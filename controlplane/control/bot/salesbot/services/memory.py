@@ -145,6 +145,8 @@ def build_sales_memory_context(
             query_text=message,
             user_id=sender_id,
             sender_name=sender_name,
+            fact_limit=0,
+            episode_limit=0,
         )
     )
     return recall.to_markdown() or "No prior operating context available."
