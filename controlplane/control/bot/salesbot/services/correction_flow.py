@@ -112,6 +112,7 @@ def check_and_handle_correction_reply(
     *,
     process_message_fn: Callable[..., bool],
     llm_extract_fn: Callable[..., dict[str, Any] | list[dict[str, Any]]] = llm_extract,
+    reply_message_id: str | None = None,
 ) -> bool:
     tracker = get_correction_tracker()
     pending = tracker.get_pending(chat_id, sender_id)
@@ -198,6 +199,7 @@ def check_and_handle_correction_reply(
                     sender_id=pending.sender_id,
                     sender_name=pending.sender_name,
                     quoted_message_id=pending.original_message_id,
+                    reply_message_id=reply_message_id,
                 )
             else:
                 reason_code = result_details.get("reason_code")
@@ -372,6 +374,7 @@ def check_and_handle_correction_reply(
             sender_id=pending.sender_id,
             sender_name=pending.sender_name,
             quoted_message_id=pending.original_message_id,
+            reply_message_id=reply_message_id,
         )
     else:
         reason_code = result_details.get("reason_code")

@@ -27,6 +27,18 @@ from controlplane.control.commissionService import build_commission_notification
 logger = logging.getLogger(__name__)
 
 
+def react_on_message(chat_id: str, message_id: str | None, emoji: str) -> None:
+    if not message_id:
+        return
+    notification_client = get_notification_client()
+    if notification_client is None:
+        return
+    try:
+        notification_client.set_reaction(chat_id, message_id, emoji)
+    except Exception as exc:
+        logger.warning("Failed to set reaction %s on message_id=%s: %s", emoji, message_id, exc)
+
+
 def _address_user_message(body: str, sender_name: str | None) -> str:
     cleaned_body = body.strip()
     if not cleaned_body or not sender_name:
@@ -56,6 +68,7 @@ def send_correction_request(
     )
     message = _address_user_message(message, sender_name)
     try:
+        react_on_message(chat_id, quoted_message_id, "❌")
         notification_client.send_text(to=chat_id, body=message, quoted=quoted_message_id)
         logger.info(
             "Sent correction request to chat_id=%s failures=%s quoted=%s",
@@ -152,6 +165,7 @@ def send_service_suggestions(
     )
     message = _address_user_message(message, sender_name)
     try:
+        react_on_message(chat_id, quoted_message_id, "❌")
         notification_client.send_text(to=chat_id, body=message, quoted=quoted_message_id)
         logger.info(
             "Sent service suggestions to chat_id=%s for service=%s suggestions=%d quoted=%s",
@@ -245,28 +259,21 @@ def send_entry_recorded_confirmation(
     sender_id: str | None = None,
     sender_name: str | None = None,
     quoted_message_id: str | None = None,
+    reply_message_id: str | None = None,
 ) -> bool:
-    notification_client = get_notification_client()
-    if notification_client is None:
-        logger.warning("Notification client not available; cannot send recorded confirmation")
-        return False
-
-    message = _address_user_message(build_entry_recorded_message(), sender_name)
-    try:
-        notification_client.send_text(to=chat_id, body=message, quoted=quoted_message_id)
-        logger.info("Sent entry recorded confirmation to chat_id=%s", chat_id)
-        record_sales_event(
-            role="assistant",
-            text=message,
-            chat_id=chat_id,
-            sender_id=sender_id,
-            sender_name=sender_name,
-            event_type="entry_recorded_confirmation",
-        )
-        return True
-    except Exception as exc:
-        logger.error("Failed to send entry recorded confirmation: %s", exc, exc_info=True)
-        return False
+    react_on_message(chat_id, quoted_message_id, "✅")
+    if reply_message_id and reply_message_id != quoted_message_id:
+        react_on_message(chat_id, reply_message_id, "✅")
+    record_sales_event(
+        role="assistant",
+        text="✅",
+        chat_id=chat_id,
+        sender_id=sender_id,
+        sender_name=sender_name,
+        event_type="entry_recorded_confirmation",
+    )
+    logger.info("Reacted ✅ on original=%s reply=%s chat_id=%s", quoted_message_id, reply_message_id, chat_id)
+    return True
 
 
 def send_final_escalation(
