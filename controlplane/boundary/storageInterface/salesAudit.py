@@ -297,12 +297,12 @@ def _parse_number(value: Any) -> float | None:
 
 
 def _find_pricelist_match(records: list[dict[str, Any]], service_value: str) -> dict[str, Any] | None:
+    service_lower = service_value.strip().lower()
     for row in records:
         row_service = _get_case_insensitive(row, ["service", "item", "name"])
         if not row_service:
             continue
-        row_service_value = str(row_service).strip().lower()
-        if row_service_value in service_value.lower() or service_value.lower() in row_service_value:
+        if str(row_service).strip().lower() == service_lower:
             return row
     return None
 

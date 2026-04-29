@@ -160,13 +160,16 @@ def check_and_handle_correction_reply(
                     "user_reply": message,
                 },
             )
-            combined_message = f"{pending.original_message}\n\n[CORRECTION: Service is '{selected_service}']"
+            corrected_entry = dict(pending.extracted_data)
+            corrected_entry["Service"] = selected_service
+            corrected_entry["confidence"] = "high"
             recorded = process_message_fn(
-                combined_message,
+                pending.original_message,
                 sender_id,
-                chat_id=None,
+                chat_id=chat_id,
                 message_id=pending.original_message_id,
                 sender_name=sender_name,
+                extracted_override=corrected_entry,
             )
             if recorded:
                 send_entry_recorded_confirmation(
