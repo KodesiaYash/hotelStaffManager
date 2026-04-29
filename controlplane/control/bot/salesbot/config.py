@@ -34,8 +34,15 @@ DEFAULT_PROMPT = (
     '24 hour format) or \'\'", "Guest": "number (only mention the number) or \'\'", "Room": "name or \'\'", '
     '"Asignee": "name or \'\'", "HotelName": "RIAD Roxanne or RIAD Persephone or \'\'", '
     '"Amount": number or 0, '
-    '"confidence": "high/medium/low"}'
+    '"confidence": "high/medium/low", '
+    '"message_type": "sales or non_sales"}'
     "] "
+    "MESSAGE TYPE RULES: "
+    "Set message_type='sales' if the message has a booking-like structure with key:value lines for "
+    "any of: service/activity name, date, time, room, guest count, hotel name. "
+    "Missing fields are fine — a message IS a sales booking if it has even 2-3 of these. "
+    "Set message_type='non_sales' ONLY for messages with absolutely no booking structure "
+    "(e.g. greetings, random chitchat, follow-up replies like 'ok thanks'). "
     "SANITY CHECKS - set confidence to low if any of these fail: "
     "1. Quantity <= 0 "
     "2. Service is empty or unclear "

@@ -160,7 +160,18 @@ def check_and_handle_correction_reply(
                     "user_reply": message,
                 },
             )
-            corrected_entry = dict(pending.extracted_data)
+            fresh = llm_extract(
+                pending.original_message,
+                chat_id=chat_id,
+                sender_id=pending.sender_id,
+                sender_name=pending.sender_name,
+            )
+            if isinstance(fresh, list) and fresh and isinstance(fresh[0], dict) and "error" not in fresh[0]:
+                corrected_entry = dict(fresh[0])
+            elif isinstance(fresh, dict) and "error" not in fresh:
+                corrected_entry = dict(fresh)
+            else:
+                corrected_entry = dict(pending.extracted_data)
             corrected_entry["Service"] = selected_service
             corrected_entry["confidence"] = "high"
             result_details: dict[str, Any] = {}

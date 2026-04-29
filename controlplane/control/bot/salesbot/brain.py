@@ -172,6 +172,15 @@ def process_message(
     wrote_sale = False
 
     for idx, entry in enumerate(entries):
+        message_type = str(_get_case_insensitive(entry, ["message_type"]) or "").strip().lower()
+        if message_type == "non_sales":
+            logger.info(
+                "Entry %d classified as non_sales by LLM, skipping silently sender_id=%s",
+                idx,
+                sender_id,
+            )
+            continue
+
         confidence = str(_get_case_insensitive(entry, ["confidence"]) or "").lower()
         required_fields_present = _required_fields_present(entry)
         if not required_fields_present:
