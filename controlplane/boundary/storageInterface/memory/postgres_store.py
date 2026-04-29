@@ -297,8 +297,8 @@ class PostgresMemoryStore:
                 SET status = %(status)s,
                     updated_at = %(updated_at)s,
                     content = CASE
-                        WHEN %(resolution_note)s IS NULL OR %(resolution_note)s = '' THEN content
-                        ELSE content || E'\nResolution: ' || %(resolution_note)s
+                        WHEN %(resolution_note)s::text IS NULL OR %(resolution_note)s::text = '' THEN content
+                        ELSE content || E'\nResolution: ' || %(resolution_note)s::text
                     END
                 WHERE created_by_bot = %(bot_name)s
                   AND layer = 'task'

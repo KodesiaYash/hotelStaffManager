@@ -443,9 +443,13 @@ def service_exists_in_pricelist(
     if len(substring_matches) == 1:
         return True, substring_matches[0], []
 
-    # If multiple substring matches, let the LLM choose the best plain/base service before
-    # asking the user to disambiguate.
+    # If multiple substring matches, check if several start with the query (prefix group).
+    # In that case, skip the LLM tiebreaker and always ask the user to pick.
     if len(substring_matches) > 1:
+        prefix_matches = [name for name in substring_matches if name.lower().startswith(service_lower)]
+        if len(prefix_matches) > 1:
+            suggestions = [(name, 0.95) for name in substring_matches]
+            return False, None, suggestions
         if llm:
             narrowed_records = [
                 row
