@@ -325,6 +325,7 @@ def process_message(
                     extracted_data=entry,
                     validation_failures=validation_failures,
                     original_message_id=message_id,
+                    missing_fields=_get_missing_mandatory_fields(entry),
                 )
 
                 if pending.should_escalate():

@@ -259,52 +259,34 @@ def check_and_handle_correction_reply(
             )
         return True
 
-    combined_message = f"{pending.original_message}\n\n[CORRECTION from user]:\n{message}"
-    extracted = llm_extract_fn(combined_message, chat_id=chat_id, sender_id=sender_id, sender_name=sender_name)
-    if isinstance(extracted, dict) and "error" in extracted:
-        logger.warning("Correction re-extraction failed: %s", extracted.get("error"))
-        pending.attempt_count += 1
-        send_final_escalation(chat_id, pending.sender_id, pending.sender_name, pending.original_message)
-        remember_sales_correction_outcome(
-            chat_id=chat_id,
-            sender_id=pending.sender_id,
-            title="Escalated SalesBot correction re-extraction failure",
-            content="Correction reply could not be re-extracted into valid sale details.",
-            metadata={"attempt_count": pending.attempt_count, "error": extracted.get("error")},
-        )
-        tracker.remove_pending(chat_id, pending.sender_id)
-        return True
+    _missing_fields = pending.missing_fields or _infer_missing_from_failures(pending.validation_failures)
+    field_interp = interpret_combined_reply(
+        original_service=str(pending.extracted_data.get("Service", "") or ""),
+        user_reply=message,
+        suggestions=[],
+        missing_fields=_missing_fields,
+        chat_id=chat_id,
+        sender_id=sender_id,
+        sender_name=sender_name,
+    )
+    corrected_entry = dict(pending.extracted_data)
+    for fk, fv in field_interp.field_values.items():
+        if fv:
+            corrected_entry[fk] = fv
+    corrected_entry["confidence"] = "high"
 
-    entries: list[dict[str, Any]] = []
-    if isinstance(extracted, list):
-        entries = [entry for entry in extracted if isinstance(entry, dict)]
-    elif isinstance(extracted, dict):
-        entries = [extracted]
-    if not entries:
-        logger.warning("Correction re-extraction returned no entries")
-        pending.attempt_count += 1
-        send_final_escalation(chat_id, pending.sender_id, pending.sender_name, pending.original_message)
-        remember_sales_correction_outcome(
-            chat_id=chat_id,
-            sender_id=pending.sender_id,
-            title="Escalated SalesBot empty correction result",
-            content="Correction reply returned no usable sale entries.",
-            metadata={"attempt_count": pending.attempt_count},
-        )
-        tracker.remove_pending(chat_id, pending.sender_id)
-        return True
-
-    entry = entries[0]
-    is_valid, validation_failures = validate_extracted_data(entry)
+    is_valid, validation_failures = validate_extracted_data(corrected_entry)
     if not is_valid:
+        still_missing = _infer_missing_from_failures(validation_failures)
         pending = tracker.add_pending(
             chat_id=chat_id,
             sender_id=sender_id,
             sender_name=pending.sender_name,
-            original_message=combined_message,
-            extracted_data=entry,
+            original_message=pending.original_message,
+            extracted_data=corrected_entry,
             validation_failures=validation_failures,
             original_message_id=pending.original_message_id,
+            missing_fields=still_missing,
         )
         if pending.should_escalate():
             logger.warning(
@@ -323,21 +305,24 @@ def check_and_handle_correction_reply(
                 chat_id,
                 sender_id=pending.sender_id,
                 status="escalated",
-                resolution_note="Correction failed repeatedly and was escalated.",
+                resolution_note=f"Correction failed repeatedly. Still missing: {', '.join(still_missing)}.",
             )
             remember_sales_correction_outcome(
                 chat_id=chat_id,
                 sender_id=pending.sender_id,
                 title="Escalated SalesBot correction",
-                content=f"Correction escalated after repeated validation failures: {', '.join(validation_failures)}.",
-                metadata={"validation_failures": validation_failures, "attempt_count": pending.attempt_count},
+                content=(
+                    f"Correction escalated after repeated failures: {', '.join(validation_failures)}. "
+                    f"Still missing: {', '.join(still_missing)}."
+                ),
+                metadata={"validation_failures": validation_failures, "still_missing": still_missing},
             )
             tracker.remove_pending(chat_id, pending.sender_id)
         else:
             send_correction_request(
                 chat_id,
                 validation_failures,
-                entry,
+                corrected_entry,
                 sender_id=pending.sender_id,
                 sender_name=pending.sender_name,
                 quoted_message_id=pending.original_message_id,
@@ -359,24 +344,27 @@ def check_and_handle_correction_reply(
         content=(
             f"Correction resolved for sender `{pending.sender_name or pending.sender_id or chat_id}`. "
             f"Original failures: {', '.join(pending.validation_failures)}. "
-            f"Final service `{get_case_insensitive(entry, ['Service']) or ''}`, "
-            f"room `{get_case_insensitive(entry, ['Room']) or ''}`, "
-            f"date `{get_case_insensitive(entry, ['Date']) or ''}`, "
-            f"time `{get_case_insensitive(entry, ['Time']) or ''}`."
+            f"Final service `{get_case_insensitive(corrected_entry, ['Service']) or ''}`, "
+            f"room `{get_case_insensitive(corrected_entry, ['Room']) or ''}`, "
+            f"date `{get_case_insensitive(corrected_entry, ['Date']) or ''}`, "
+            f"time `{get_case_insensitive(corrected_entry, ['Time']) or ''}`."
         ),
         fact_title="Resolved sales correction pattern",
         fact_content=(
             f"Resolved correction required fields `{', '.join(pending.validation_failures)}` and ended with "
-            f"service `{get_case_insensitive(entry, ['Service']) or ''}`."
+            f"service `{get_case_insensitive(corrected_entry, ['Service']) or ''}`."
         ),
-        metadata={"validation_failures": pending.validation_failures, "final_entry": entry},
+        metadata={"validation_failures": pending.validation_failures, "final_entry": corrected_entry},
     )
+    result_details: dict[str, Any] = {}
     recorded = process_message_fn(
-        combined_message,
+        pending.original_message,
         sender_id,
         chat_id=None,
         message_id=pending.original_message_id,
         sender_name=sender_name,
+        extracted_override=corrected_entry,
+        result_details=result_details,
     )
     if recorded:
         send_entry_recorded_confirmation(
@@ -386,5 +374,31 @@ def check_and_handle_correction_reply(
             quoted_message_id=pending.original_message_id,
         )
     else:
-        send_final_escalation(chat_id, pending.sender_id, pending.sender_name, pending.original_message)
+        reason_code = result_details.get("reason_code")
+        reason_details = {
+            k: result_details[k]
+            for k in ("service", "selling_price", "cost_price", "profit", "quantity")
+            if k in result_details
+        } or None
+        send_final_escalation(
+            chat_id, pending.sender_id, pending.sender_name, pending.original_message,
+            reason_code=reason_code, reason_details=reason_details,
+        )
     return True
+
+
+def _infer_missing_from_failures(validation_failures: list[str]) -> list[str]:
+    mapping = {
+        "date": "Date",
+        "time": "Time",
+        "room": "Room",
+        "hotel": "HotelName",
+        "hotelname": "HotelName",
+    }
+    result = []
+    for failure in validation_failures:
+        failure_lower = failure.lower()
+        for keyword, field_name in mapping.items():
+            if keyword in failure_lower and field_name not in result:
+                result.append(field_name)
+    return result
