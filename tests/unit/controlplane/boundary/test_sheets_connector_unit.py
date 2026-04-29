@@ -109,6 +109,7 @@ def test_validate_service_uses_llm_to_resolve_ambiguous_matches(
     assert suggestions == []
     assert prompts
     assert "Do not require an exact full-string match" in prompts[0]
+    assert "If two or more plain/base candidates are both strong matches" in prompts[0]
     assert "If the staff writes `trans` or `trans to airport`" in prompts[0]
 
 
