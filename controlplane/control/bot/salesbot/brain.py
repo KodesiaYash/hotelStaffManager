@@ -42,7 +42,7 @@ from controlplane.control.bot.salesbot.services.messaging import (  # noqa: E402
     send_commission_notification as _send_commission_notification,
     send_correction_request as _send_correction_request,
     send_escalation as _send_escalation,
-    send_escalation_to_all as _send_escalation_to_all,
+    send_final_escalation as _send_final_escalation,
     send_service_suggestions as _send_service_suggestions,
 )
 from controlplane.control.commissionService import (  # noqa: E402
@@ -55,6 +55,12 @@ logger = logging.getLogger(__name__)
 
 CORRECTION_TASK_TYPE = salesbot_config.CORRECTION_TASK_TYPE
 ESCALATION_CHAT_IDS = salesbot_config.ESCALATION_CHAT_IDS
+
+
+def _update_result_details(result_details: dict[str, Any] | None, **updates: Any) -> None:
+    if result_details is None:
+        return
+    result_details.update({key: value for key, value in updates.items() if value is not None})
 
 
 def check_and_handle_correction_reply(
@@ -83,6 +89,8 @@ def process_message(
     chat_id: str | None = None,
     message_id: str | None = None,
     sender_name: str | None = None,
+    extracted_override: dict[str, Any] | list[dict[str, Any]] | None = None,
+    result_details: dict[str, Any] | None = None,
 ) -> bool:
     logger.debug(
         "SalesBot processing message length=%d sender_id=%s chat_id=%s message_id=%s sender_name=%s",
@@ -107,26 +115,36 @@ def process_message(
 
     if chat_id and check_and_handle_correction_reply(message, sender_id, sender_name, chat_id):
         logger.info("Message handled as correction reply chat_id=%s", chat_id)
+        _update_result_details(result_details, status="handled_as_correction")
         return False
 
-    if not _is_sales_message(message):
+    if extracted_override is None and not _is_sales_message(message):
         logger.info(
             "Ignoring non-sales message length=%d sender_id=%s message_preview=%s",
             len(message),
             sender_id,
             message[:100].replace("\n", " "),
         )
+        _update_result_details(result_details, status="ignored", reason_code="not_sales_message")
         return False
 
-    extracted = llm_extract(message, chat_id=chat_id, sender_id=sender_id, sender_name=sender_name)
-    if isinstance(extracted, dict) and "error" in extracted:
-        logger.error(
-            "SalesBot extraction failed error=%s sender_id=%s message_preview=%s",
-            extracted.get("error"),
-            sender_id,
-            message[:200],
-        )
-        return False
+    extracted = extracted_override
+    if extracted is None:
+        extracted = llm_extract(message, chat_id=chat_id, sender_id=sender_id, sender_name=sender_name)
+        if isinstance(extracted, dict) and "error" in extracted:
+            logger.error(
+                "SalesBot extraction failed error=%s sender_id=%s message_preview=%s",
+                extracted.get("error"),
+                sender_id,
+                message[:200],
+            )
+            _update_result_details(
+                result_details,
+                status="failed",
+                reason_code="extraction_failed",
+                error=extracted.get("error"),
+            )
+            return False
 
     if isinstance(extracted, list):
         entries = [entry for entry in extracted if isinstance(entry, dict)]
@@ -139,6 +157,7 @@ def process_message(
             sender_id,
             message[:200],
         )
+        _update_result_details(result_details, status="failed", reason_code="unsupported_extraction_type")
         return False
 
     if not entries:
@@ -147,13 +166,15 @@ def process_message(
             sender_id,
             message[:200],
         )
+        _update_result_details(result_details, status="failed", reason_code="empty_extraction")
         return False
 
     wrote_sale = False
 
     for idx, entry in enumerate(entries):
         confidence = str(_get_case_insensitive(entry, ["confidence"]) or "").lower()
-        if not _required_fields_present(entry):
+        required_fields_present = _required_fields_present(entry)
+        if not required_fields_present:
             confidence = "low"
             entry["confidence"] = "low"
 
@@ -162,6 +183,63 @@ def process_message(
             confidence = "low"
             entry["confidence"] = "low"
             logger.warning("Entry %d failed sanity checks: %s", idx, "; ".join(validation_failures))
+
+        service = _get_case_insensitive(entry, ["Service"]) or ""
+        quantity = _get_case_insensitive(entry, ["Quantity"]) or ""
+        if isinstance(quantity, str) and not quantity.strip():
+            quantity = 1
+        if quantity is None:
+            quantity = 1
+        quantity_value = _coerce_quantity(quantity)
+        quantity_row: Any = int(quantity_value) if quantity_value.is_integer() else quantity_value
+
+        if service and chat_id:
+            is_valid_service, matched_service, suggestions = _get_sales_audit().validate_service(
+                str(service),
+                llm=_get_llm_interface(),
+            )
+            if not is_valid_service:
+                if suggestions:
+                    logger.warning(
+                        "Service '%s' not found in pricelist, sending suggestions chat_id=%s",
+                        service,
+                        chat_id,
+                    )
+                    _send_service_suggestions(
+                        chat_id,
+                        str(service),
+                        suggestions,
+                        sender_id=sender_id,
+                        sender_name=sender_name,
+                        quoted_message_id=message_id,
+                    )
+                    tracker = get_correction_tracker()
+                    tracker.add_pending(
+                        chat_id=chat_id,
+                        sender_id=sender_id,
+                        sender_name=sender_name,
+                        original_message=message,
+                        extracted_data=entry,
+                        validation_failures=[f"Service '{service}' not found in price list"],
+                        service_suggestions=suggestions,
+                        original_message_id=message_id,
+                    )
+                    continue
+                logger.warning("Service '%s' not found and no suggestions, escalating chat_id=%s", service, chat_id)
+                _escalate_unknown_service(chat_id, sender_id, sender_name, str(service), message)
+                continue
+            if matched_service:
+                service = matched_service
+                entry["Service"] = matched_service
+                logger.debug("Service matched to pricelist: %s", service)
+
+        if confidence == "low" and required_fields_present and is_valid and service:
+            confidence = "medium"
+            entry["confidence"] = "medium"
+            logger.info(
+                "SalesBot promoted low-confidence extraction after successful service validation service=%s",
+                service,
+            )
 
         if confidence == "low":
             log_low_confidence(
@@ -175,6 +253,37 @@ def process_message(
                 }
             )
             logger.info("SalesBot confidence=%s skipping sheet write", confidence or "unknown")
+
+            if not validation_failures and service and chat_id:
+                _, _, ambiguous_suggestions = _get_sales_audit().validate_service(
+                    str(service), llm=None
+                )
+                if ambiguous_suggestions:
+                    logger.warning(
+                        "Low confidence with ambiguous service '%s', sending suggestions chat_id=%s",
+                        service,
+                        chat_id,
+                    )
+                    _send_service_suggestions(
+                        chat_id,
+                        str(service),
+                        ambiguous_suggestions,
+                        sender_id=sender_id,
+                        sender_name=sender_name,
+                        quoted_message_id=message_id,
+                    )
+                    tracker = get_correction_tracker()
+                    tracker.add_pending(
+                        chat_id=chat_id,
+                        sender_id=sender_id,
+                        sender_name=sender_name,
+                        original_message=message,
+                        extracted_data=entry,
+                        validation_failures=[f"Service '{service}' is ambiguous"],
+                        service_suggestions=ambiguous_suggestions,
+                        original_message_id=message_id,
+                    )
+                    continue
 
             if validation_failures and chat_id:
                 tracker = get_correction_tracker()
@@ -253,54 +362,6 @@ def process_message(
             )
             continue
 
-        service = _get_case_insensitive(entry, ["Service"]) or ""
-        quantity = _get_case_insensitive(entry, ["Quantity"]) or ""
-        if isinstance(quantity, str) and not quantity.strip():
-            quantity = 1
-        if quantity is None:
-            quantity = 1
-        quantity_value = _coerce_quantity(quantity)
-        quantity_row: Any = int(quantity_value) if quantity_value.is_integer() else quantity_value
-
-        if service and chat_id:
-            is_valid_service, matched_service, suggestions = _get_sales_audit().validate_service(
-                str(service),
-                llm=_get_llm_interface(),
-            )
-            if not is_valid_service:
-                if suggestions:
-                    logger.warning(
-                        "Service '%s' not found in pricelist, sending suggestions chat_id=%s",
-                        service,
-                        chat_id,
-                    )
-                    _send_service_suggestions(
-                        chat_id,
-                        str(service),
-                        suggestions,
-                        sender_id=sender_id,
-                        sender_name=sender_name,
-                        quoted_message_id=message_id,
-                    )
-                    tracker = get_correction_tracker()
-                    tracker.add_pending(
-                        chat_id=chat_id,
-                        sender_id=sender_id,
-                        sender_name=sender_name,
-                        original_message=message,
-                        extracted_data=entry,
-                        validation_failures=[f"Service '{service}' not found in price list"],
-                        service_suggestions=suggestions,
-                        original_message_id=message_id,
-                    )
-                    continue
-                logger.warning("Service '%s' not found and no suggestions, escalating chat_id=%s", service, chat_id)
-                _escalate_unknown_service(chat_id, sender_id, sender_name, str(service), message)
-                continue
-            if matched_service:
-                service = matched_service
-                logger.debug("Service matched to pricelist: %s", service)
-
         selling_price = _get_sales_audit().get_selling_price(service, quantity_value, llm=_get_llm_interface())
         cost_price = _get_sales_audit().calculate_cost(service, quantity_value, llm=_get_llm_interface())
 
@@ -313,17 +374,19 @@ def process_message(
                 chat_id,
             )
             if chat_id:
-                escalation_message = (
-                    f"🚨 *SalesBot Escalation - Zero/Missing Price*\n\n"
-                    f"*User:* {sender_name or 'Unknown'}\n"
-                    f"*Service:* {service}\n"
-                    f"*Quantity:* {quantity_value}\n"
-                    f"*Selling Price:* {selling_price}\n"
-                    f"*Cost Price:* {cost_price}\n\n"
-                    f"*Original Message:*\n```\n{message[:500]}\n```\n\n"
-                    f"_Price data is missing or zero. Please update pricelist or manually process._"
+                _send_final_escalation(
+                    chat_id,
+                    sender_id,
+                    sender_name,
+                    message,
+                    reason_code="zero_price",
+                    reason_details={
+                        "service": service,
+                        "selling_price": selling_price,
+                        "cost_price": cost_price,
+                        "quantity": quantity_value,
+                    },
                 )
-                _send_escalation_to_all(escalation_message)
                 _remember_sales_correction_outcome(
                     chat_id=chat_id,
                     sender_id=sender_id,
@@ -334,6 +397,15 @@ def process_message(
                     ),
                     metadata={"service": service, "quantity": quantity_value},
                 )
+            _update_result_details(
+                result_details,
+                status="failed",
+                reason_code="zero_price",
+                service=service,
+                selling_price=selling_price,
+                cost_price=cost_price,
+                quantity=quantity_value,
+            )
             continue
 
         profit = selling_price - cost_price
@@ -348,18 +420,20 @@ def process_message(
                 chat_id,
             )
             if chat_id:
-                escalation_message = (
-                    f"🚨 *SalesBot Escalation - Negative/Zero Profit*\n\n"
-                    f"*User:* {sender_name or 'Unknown'}\n"
-                    f"*Service:* {service}\n"
-                    f"*Quantity:* {quantity_value}\n"
-                    f"*Selling Price:* {selling_price} MAD\n"
-                    f"*Cost Price:* {cost_price} MAD\n"
-                    f"*Profit:* {profit} MAD\n\n"
-                    f"*Original Message:*\n```\n{message[:500]}\n```\n\n"
-                    f"_Cost exceeds or equals selling price. Please review pricelist or manually process._"
+                _send_final_escalation(
+                    chat_id,
+                    sender_id,
+                    sender_name,
+                    message,
+                    reason_code="non_positive_profit",
+                    reason_details={
+                        "service": service,
+                        "selling_price": selling_price,
+                        "cost_price": cost_price,
+                        "profit": profit,
+                        "quantity": quantity_value,
+                    },
                 )
-                _send_escalation_to_all(escalation_message)
                 _remember_sales_correction_outcome(
                     chat_id=chat_id,
                     sender_id=sender_id,
@@ -369,6 +443,16 @@ def process_message(
                     ),
                     metadata={"service": service, "profit": profit, "quantity": quantity_value},
                 )
+            _update_result_details(
+                result_details,
+                status="failed",
+                reason_code="non_positive_profit",
+                service=service,
+                selling_price=selling_price,
+                cost_price=cost_price,
+                profit=profit,
+                quantity=quantity_value,
+            )
             continue
 
         sale_id = generate_sale_id()
@@ -391,6 +475,13 @@ def process_message(
             )
         except Exception as exc:
             logger.error("SalesBot write failed: %s", exc, exc_info=True)
+            _update_result_details(
+                result_details,
+                status="failed",
+                reason_code="write_failed",
+                service=service,
+                error=str(exc),
+            )
             continue
         logger.info(
             "SalesBot sheet write success sale_id=%s service=%s confidence=%s selling_price=%s cost_price=%s",
@@ -426,6 +517,12 @@ def process_message(
             )
             _refresh_sales_summary(chat_id, sender_id)
         wrote_sale = True
+        _update_result_details(
+            result_details,
+            status="recorded",
+            service=service,
+            sale_id=sale_id,
+        )
 
     return wrote_sale
 
