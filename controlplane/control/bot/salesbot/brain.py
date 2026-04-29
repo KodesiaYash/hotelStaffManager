@@ -57,6 +57,21 @@ CORRECTION_TASK_TYPE = salesbot_config.CORRECTION_TASK_TYPE
 ESCALATION_CHAT_IDS = salesbot_config.ESCALATION_CHAT_IDS
 
 
+def _get_missing_mandatory_fields(entry: dict[str, Any]) -> list[str]:
+    mandatory = [
+        ("Date", ["Date"]),
+        ("Time", ["Time"]),
+        ("Room", ["Room"]),
+        ("HotelName", ["HotelName", "hotel", "hotel_name", "Hotel"]),
+    ]
+    missing = []
+    for label, keys in mandatory:
+        val = _get_case_insensitive(entry, keys)
+        if not val or (isinstance(val, str) and not val.strip()):
+            missing.append(label)
+    return missing
+
+
 def _update_result_details(result_details: dict[str, Any] | None, **updates: Any) -> None:
     if result_details is None:
         return
@@ -214,6 +229,7 @@ def process_message(
                         service,
                         chat_id,
                     )
+                    _missing_fields = _get_missing_mandatory_fields(entry)
                     _send_service_suggestions(
                         chat_id,
                         str(service),
@@ -221,6 +237,7 @@ def process_message(
                         sender_id=sender_id,
                         sender_name=sender_name,
                         quoted_message_id=message_id,
+                        missing_fields=_missing_fields,
                     )
                     tracker = get_correction_tracker()
                     tracker.add_pending(
@@ -232,6 +249,7 @@ def process_message(
                         validation_failures=[f"Service '{service}' not found in price list"],
                         service_suggestions=suggestions,
                         original_message_id=message_id,
+                        missing_fields=_missing_fields,
                     )
                     continue
                 logger.warning("Service '%s' not found and no suggestions, escalating chat_id=%s", service, chat_id)
@@ -273,6 +291,7 @@ def process_message(
                         service,
                         chat_id,
                     )
+                    _missing_fields = _get_missing_mandatory_fields(entry)
                     _send_service_suggestions(
                         chat_id,
                         str(service),
@@ -280,6 +299,7 @@ def process_message(
                         sender_id=sender_id,
                         sender_name=sender_name,
                         quoted_message_id=message_id,
+                        missing_fields=_missing_fields,
                     )
                     tracker = get_correction_tracker()
                     tracker.add_pending(
@@ -291,6 +311,7 @@ def process_message(
                         validation_failures=[f"Service '{service}' is ambiguous"],
                         service_suggestions=ambiguous_suggestions,
                         original_message_id=message_id,
+                        missing_fields=_missing_fields,
                     )
                     continue
 

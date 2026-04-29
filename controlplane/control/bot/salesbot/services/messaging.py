@@ -125,6 +125,7 @@ def send_service_suggestions(
     user_reply: str | None = None,
     attempt_count: int = 1,
     quoted_message_id: str | None = None,
+    missing_fields: list[str] | None = None,
 ) -> bool:
     notification_client = get_notification_client()
     if notification_client is None:
@@ -139,6 +140,7 @@ def send_service_suggestions(
         sender_name=sender_name,
         user_reply=user_reply,
         attempt_count=attempt_count,
+        missing_fields=missing_fields,
     )
     message = _address_user_message(message, sender_name)
     try:

@@ -42,6 +42,8 @@ class PendingCorrection:
     original_message_id: str | None = None
     # Awaiting confirmation for selected service
     awaiting_service_confirmation: str | None = None
+    # Mandatory fields that were missing when the correction was created
+    missing_fields: list[str] = field(default_factory=list)
 
     def is_expired(self) -> bool:
         return time.time() - self.created_at > CORRECTION_EXPIRY_SECONDS
@@ -212,6 +214,7 @@ class CorrectionTracker:
         validation_failures: list[str],
         service_suggestions: list[tuple[str, float]] | None = None,
         original_message_id: str | None = None,
+        missing_fields: list[str] | None = None,
     ) -> PendingCorrection:
         """Add a new pending correction request."""
         with self._data_lock:
@@ -227,6 +230,8 @@ class CorrectionTracker:
                     existing.service_suggestions = service_suggestions
                 if original_message_id is not None:
                     existing.original_message_id = original_message_id
+                if missing_fields is not None:
+                    existing.missing_fields = missing_fields
                 logger.info(
                     "Updated pending correction for chat_id=%s attempt=%d",
                     chat_id,
@@ -243,6 +248,7 @@ class CorrectionTracker:
                 validation_failures=validation_failures,
                 service_suggestions=service_suggestions or [],
                 original_message_id=original_message_id,
+                missing_fields=missing_fields or [],
             )
             self._pending[key] = correction
             logger.info("Added pending correction for chat_id=%s", chat_id)

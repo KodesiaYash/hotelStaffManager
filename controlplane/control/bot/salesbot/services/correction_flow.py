@@ -9,7 +9,11 @@ from controlplane.control.bot.salesbot.correction_tracker import (
     get_correction_tracker,
 )
 from controlplane.control.bot.salesbot.dependencies import get_notification_client
-from controlplane.control.bot.salesbot.services.dialogue import interpret_service_reply
+from controlplane.control.bot.salesbot.services.dialogue import (
+    CombinedReplyInterpretation,
+    interpret_combined_reply,
+    interpret_service_reply,
+)
 from controlplane.control.bot.salesbot.services.extraction import (
     get_case_insensitive,
     llm_extract,
@@ -117,10 +121,11 @@ def check_and_handle_correction_reply(
     logger.info("Found pending correction for chat_id=%s, merging with reply", chat_id)
 
     if pending.service_suggestions:
-        interpretation = interpret_service_reply(
+        interpretation: CombinedReplyInterpretation = interpret_combined_reply(
             original_service=str(pending.extracted_data.get("Service", "") or ""),
             user_reply=message,
             suggestions=pending.service_suggestions,
+            missing_fields=pending.missing_fields,
             chat_id=chat_id,
             sender_id=sender_id,
             sender_name=sender_name,
@@ -174,6 +179,9 @@ def check_and_handle_correction_reply(
                 corrected_entry = dict(pending.extracted_data)
             corrected_entry["Service"] = selected_service
             corrected_entry["confidence"] = "high"
+            for field_key, field_val in interpretation.field_values.items():
+                if field_val:
+                    corrected_entry[field_key] = field_val
             result_details: dict[str, Any] = {}
             recorded = process_message_fn(
                 pending.original_message,
@@ -198,6 +206,11 @@ def check_and_handle_correction_reply(
                     for k in ("service", "selling_price", "cost_price", "profit", "quantity")
                     if k in result_details
                 } or None
+                unresolved = interpretation.unresolved_fields
+                if unresolved:
+                    if reason_details is None:
+                        reason_details = {}
+                    reason_details["missing_fields"] = unresolved
                 send_final_escalation(
                     chat_id,
                     pending.sender_id,
