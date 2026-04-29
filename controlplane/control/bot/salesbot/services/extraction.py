@@ -142,10 +142,20 @@ def safe_json_load(
         }
 
 
+_HOTEL_KEYWORDS = ("riad", "roxanne", "persephone", "persephon")
+_HOTEL_KEYS = ["HotelName", "hotel", "hotel_name", "Hotel"]
+
+
+def _looks_like_hotel(value: str) -> bool:
+    low = value.strip().lower()
+    return any(kw in low for kw in _HOTEL_KEYWORDS)
+
+
 def required_fields_present(extracted: dict[str, Any]) -> bool:
-    required = ["Service", "Date", "Time", "Room"]
+    required = ["Service", "Date", "Time", "Room", "HotelName"]
     for key in required:
-        value = get_case_insensitive(extracted, [key])
+        keys = ["HotelName", "hotel", "hotel_name", "Hotel"] if key == "HotelName" else [key]
+        value = get_case_insensitive(extracted, keys)
         if value is None:
             return False
         if isinstance(value, str) and not value.strip():
@@ -183,9 +193,16 @@ def validate_extracted_data(extracted: dict[str, Any]) -> tuple[bool, list[str]]
         logger.warning("Sanity check failed: Time is empty")
 
     room = get_case_insensitive(extracted, ["Room"])
-    if not room or (isinstance(room, str) and not room.strip()):
+    _room_str = room.strip().lower() if isinstance(room, str) else ""
+    _room_is_hotel = any(kw in _room_str for kw in _HOTEL_KEYWORDS)
+    if not room or (isinstance(room, str) and not room.strip()) or _room_is_hotel:
         failures.append("Room is empty or missing")
-        logger.warning("Sanity check failed: Room is empty")
+        logger.warning("Sanity check failed: Room is empty or looks like hotel name: %s", room)
+
+    hotel = get_case_insensitive(extracted, ["HotelName", "hotel", "hotel_name", "Hotel"])
+    if not hotel or (isinstance(hotel, str) and not hotel.strip()):
+        failures.append("Hotel name is empty or missing")
+        logger.warning("Sanity check failed: HotelName is empty")
 
     guest = get_case_insensitive(extracted, ["Guest"])
     if guest and isinstance(guest, str) and guest.strip():

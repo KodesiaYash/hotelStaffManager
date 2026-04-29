@@ -16,6 +16,21 @@ DEFAULT_PROMPT = (
     "Do NOT expand, complete, or add location/variant qualifiers (e.g. 'Agafay', 'Palmeraie', pack numbers) "
     "that are not explicitly in the message, even if past corrections suggest a specific match. "
     "Service disambiguation is handled separately after extraction.\n\n"
+    "HOTEL NAME RULES (CRITICAL — follow exactly):\n"
+    "1. The ONLY two valid hotels are 'RIAD Roxanne' and 'RIAD Persephone'. "
+    "Always output them in this exact casing.\n"
+    "2. Any mention of 'RIAD', 'Roxanne', 'Roksane', 'Roksanne', 'Rioxane' or any "
+    "phonetic/spelling variant of Roxanne → always set HotelName='RIAD Roxanne'.\n"
+    "3. Any mention of 'Persephone', 'Persephon', 'Persefone', 'Persefon', 'Persphone', "
+    "'Persephone', 'Persephona', or any phonetic/spelling variant of Persephone → "
+    "always set HotelName='RIAD Persephone'.\n"
+    "4. RIAD Roxanne and RIAD Persephone are HOTEL NAMES, never room names. "
+    "NEVER put a hotel name into the 'Room' field. "
+    "If the message contains a hotel name with no separate room label, "
+    "set HotelName to the correct hotel and leave Room=''.\n"
+    "5. Room is a specific room identifier (e.g. 'Lily', 'Fez', 'Rose', 'Suite 1'). "
+    "It is NEVER a hotel name. If you cannot identify a room name, set Room=''.\n"
+    "6. If the hotel name is absent from the message, set HotelName=''.\n\n"
     "Analyze this WhatsApp message for a sales lead. The service name may be mentioned "
     "along with a number; use your best intelligence to judge if it is the quantity "
     'of the service sold. If yes, populate the "Quantity" field, otherwise default to 1. '
@@ -31,7 +46,7 @@ DEFAULT_PROMPT = (
     "["
     '{"Service": "task or \'\'", "Quantity": "number or \'1\'", "Date": "number in DD/MM/YYYY format or \'\'", '
     '"Time": "number in 24 hour format (If am or pm is given, infer the equivalent time in '
-    '24 hour format) or \'\'", "Guest": "number (only mention the number) or \'\'", "Room": "name or \'\'", '
+    '24 hour format) or \'\'", "Guest": "number (only mention the number) or \'\'", "Room": "specific room name or \'\'", '
     '"Asignee": "name or \'\'", "HotelName": "RIAD Roxanne or RIAD Persephone or \'\'", '
     '"Amount": number or 0, '
     '"confidence": "high/medium/low", '
@@ -49,6 +64,7 @@ DEFAULT_PROMPT = (
     "3. Date format is invalid or missing "
     "4. Time format is invalid or missing "
     "5. Room is empty or missing "
+    "6. HotelName is empty or missing "
     "Message: __MESSAGE__"
 )
 
