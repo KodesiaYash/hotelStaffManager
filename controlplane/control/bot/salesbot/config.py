@@ -12,6 +12,10 @@ ESCALATION_CHAT_IDS = [x.strip() for x in _escalation_ids.split(",") if x.strip(
 DEFAULT_PROMPT = (
     "Known operating context from prior corrections and shared learnings:\n"
     "__MEMORY_CONTEXT__\n\n"
+    "IMPORTANT: Extract the 'Service' field EXACTLY as written in the message. "
+    "Do NOT expand, complete, or add location/variant qualifiers (e.g. 'Agafay', 'Palmeraie', pack numbers) "
+    "that are not explicitly in the message, even if past corrections suggest a specific match. "
+    "Service disambiguation is handled separately after extraction.\n\n"
     "Analyze this WhatsApp message for a sales lead. The service name may be mentioned "
     "along with a number; use your best intelligence to judge if it is the quantity "
     'of the service sold. If yes, populate the "Quantity" field, otherwise default to 1. '
