@@ -4,6 +4,7 @@ import csv
 import os
 import re
 from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from typing import Any, Protocol
 
@@ -170,9 +171,9 @@ class SalesAudit:
 
         direct_match = _find_pricelist_match(records, service_value)
         if direct_match is None and llm:
-            matched_name = _llm_match_service(service_value, records, llm)
-            if matched_name:
-                direct_match = _find_pricelist_match(records, matched_name)
+            llm_result = _llm_match_service(service_value, records, llm)
+            if llm_result and llm_result.status == "matched" and llm_result.match:
+                direct_match = _find_pricelist_match(records, llm_result.match)
 
         if direct_match is None:
             return 0.0
@@ -212,9 +213,9 @@ class SalesAudit:
 
         direct_match = _find_pricelist_match(records, service_value)
         if direct_match is None and llm:
-            matched_name = _llm_match_service(service_value, records, llm)
-            if matched_name:
-                direct_match = _find_pricelist_match(records, matched_name)
+            llm_result = _llm_match_service(service_value, records, llm)
+            if llm_result and llm_result.status == "matched" and llm_result.match:
+                direct_match = _find_pricelist_match(records, llm_result.match)
 
         if direct_match is None:
             return 0.0
@@ -306,7 +307,16 @@ def _find_pricelist_match(records: list[dict[str, Any]], service_value: str) -> 
     return None
 
 
-def _llm_match_service(service_value: str, records: list[dict[str, Any]], llm: LLMClient) -> str | None:
+@dataclass
+class LLMMatchResult:
+    status: str
+    match: str | None = None
+    suggestions: list[str] = field(default_factory=list)
+
+
+def _llm_match_service(
+    service_value: str, records: list[dict[str, Any]], llm: LLMClient
+) -> LLMMatchResult | None:
     if os.getenv("SALES_BOT_LLM_MATCHING") != "1":
         return None
     candidates = [
@@ -318,35 +328,40 @@ def _llm_match_service(service_value: str, records: list[dict[str, Any]], llm: L
         return None
     scored = sorted(
         candidates,
-        key=lambda name: SequenceMatcher(None, service_value, str(name).lower()).ratio(),
+        key=lambda name: SequenceMatcher(None, service_value.lower(), str(name).lower()).ratio(),
         reverse=True,
     )
     top_candidates = scored[:20]
+    candidate_lookup = {str(name).strip().lower(): str(name) for name in top_candidates}
     prompt = (
-        "You are matching a rough service name written by hotel staff to a price list. "
-        "Do not require an exact full-string match. Staff may use shorthand, partial names, phonetic spellings, "
-        "misspellings, broken English, or low-literacy wording. "
-        "Choose the single best candidate only when it clearly represents the intended core service. "
-        "Prefer the simple/base service over bundle or combo services "
-        "unless the rough input explicitly mentions the extras. "
-        "If a candidate name contains multiple services, add-ons, bundles, or combos such as `+`, `/`, `and`, "
-        "`combo`, `package`, `duo`, `trio`, or `quad`, treat that candidate as low confidence unless the input "
-        "explicitly mentions those extra parts. "
-        "If two or more plain/base candidates are both strong matches for the same input, do not guess between them. "
-        "Return an empty match with low confidence so the system can ask the user to clarify. "
-        "Avoid matching to unrelated bundled services just because they share one word.\n"
+        "You are matching a rough service name written by hotel staff to a price list.\n"
+        "Do not require an exact full-string match. Staff may use shorthand, partial names, "
+        "phonetic spellings, misspellings, broken English, or low-literacy wording.\n"
+        "Rules:\n"
+        "1. Choose 'matched' only when one candidate clearly and unambiguously represents the intended service.\n"
+        "2. Prefer the plain/base service over bundle or combo candidates unless the input mentions the extras.\n"
+        "3. If the input is a short standalone word that is a PREFIX of multiple candidates "
+        "(e.g., input='agafay', candidates include 'Agafay pack 1', 'Agafay pack 2', 'Agafay pack 3'), "
+        "return 'ambiguous' listing only the candidates that START WITH the input word. "
+        "Do NOT include candidates that merely contain the word elsewhere (e.g., 'Horse Ride Agafay').\n"
+        "4. If two or more plain/base candidates are equally strong, return 'ambiguous'.\n"
+        "5. If no candidate is a reasonable match, return 'no_match'.\n"
         "Examples:\n"
-        "- If the staff writes `hammam` and candidates include a plain/one-hour hammam option "
-        "and `hammam + massage`, choose the plain hammam option.\n"
-        "- If the staff writes `massage` and candidates include a plain/one-hour massage option "
-        "and `hammam + massage`, choose the plain massage option.\n"
-        "- If the staff writes `dinner`, a combo like `quad + dinner` is low confidence "
-        "unless `quad` is also mentioned.\n"
-        "- If the staff writes `dinner` and there are two strong plain matches like `Dinner (150)` and `Dinner (170)`, "
-        "do not choose one. Return an empty match with low confidence so the user can clarify.\n"
-        "- If the staff writes `trans` or `trans to airport`, match it to `transfer to airport`.\n"
-        "- Understand short forms and common mistakes from less-educated writers.\n"
-        'Return ONLY JSON: {"match": "<exact candidate or empty>", "confidence": "high|medium|low"}.\n\n'
+        "- Input='hammam', candidates include 'Hammam 1h' and 'Hammam + Massage': "
+        "return matched='Hammam 1h'.\n"
+        "- Input='massage', candidates include 'Massage 1h' and 'Hammam + Massage': "
+        "return matched='Massage 1h'.\n"
+        "- Input='dinner', candidates include 'Dinner (150)' and 'Dinner (170)': "
+        "return ambiguous=['Dinner (150)', 'Dinner (170)'].\n"
+        "- Input='agafay', candidates include 'Agafay pack 1', 'Agafay pack 2', 'Agafay pack 3', "
+        "'Agafay pack 4', 'Horse Ride Agafay': "
+        "return ambiguous=['Agafay pack 1', 'Agafay pack 2', 'Agafay pack 3', 'Agafay pack 4']. "
+        "Horse Ride Agafay is excluded because 'agafay' does not start it.\n"
+        "- Input='trans' or 'trans to airport': return matched='Transfer to airport'.\n"
+        "Return ONLY JSON in one of these formats:\n"
+        '{"status": "matched", "match": "<exact candidate>"}\n'
+        '{"status": "ambiguous", "suggestions": ["<candidate1>", "<candidate2>", ...]}\n'
+        '{"status": "no_match"}\n\n'
         f'Service to match: "{service_value}"\n'
         f"Candidates: {top_candidates}\n"
     )
@@ -357,20 +372,29 @@ def _llm_match_service(service_value: str, records: list[dict[str, Any]], llm: L
     try:
         import json
 
-        data = json.loads(response.strip())
+        raw = response.strip()
+        if raw.startswith("```"):
+            raw = re.sub(r"^```[\w]*\n?", "", raw)
+            raw = re.sub(r"\n?```$", "", raw)
+        data = json.loads(raw)
     except Exception:
         return None
-    match = str(data.get("match") or "").strip()
-    confidence = str(data.get("confidence") or "").strip().lower()
-    if not match:
-        return None
-    candidate_lookup = {str(name).strip().lower(): str(name) for name in top_candidates}
-    canonical = candidate_lookup.get(match.lower())
-    if not canonical:
-        return None
-    if confidence == "low":
-        return None
-    return canonical
+    status = str(data.get("status") or "").strip().lower()
+    if status == "matched":
+        match_name = str(data.get("match") or "").strip()
+        canonical = candidate_lookup.get(match_name.lower())
+        if canonical:
+            return LLMMatchResult(status="matched", match=canonical)
+    elif status == "ambiguous":
+        raw_suggestions = data.get("suggestions") or []
+        resolved = [
+            candidate_lookup[s.strip().lower()]
+            for s in raw_suggestions
+            if isinstance(s, str) and s.strip().lower() in candidate_lookup
+        ]
+        if resolved:
+            return LLMMatchResult(status="ambiguous", suggestions=resolved)
+    return LLMMatchResult(status="no_match")
 
 
 def find_nearest_services(service_value: str, records: list[dict[str, Any]], top_n: int = 5) -> list[tuple[str, float]]:
@@ -422,72 +446,28 @@ def service_exists_in_pricelist(
 
     service_lower = service_value.strip().lower()
 
-    # First collect ALL exact/substring matches
-    substring_matches: list[str] = []
+    # Exact match (case-insensitive equality only)
     for row in records:
         row_service = _get_case_insensitive(row, ["service", "item", "name"])
         if not row_service:
             continue
-        row_service_str = str(row_service).strip()
-        row_service_lower = row_service_str.lower()
+        if str(row_service).strip().lower() == service_lower:
+            return True, str(row_service).strip(), []
 
-        # Exact or substring match
-        if (
-            row_service_lower == service_lower
-            or service_lower in row_service_lower
-            or row_service_lower in service_lower
-        ):
-            substring_matches.append(row_service_str)
+    # LLM matching - handles everything: single match, ambiguous suggestions, no match
+    if llm:
+        llm_result = _llm_match_service(service_value, records, llm)
+        if llm_result:
+            if llm_result.status == "matched" and llm_result.match:
+                return True, llm_result.match, []
+            if llm_result.status == "ambiguous" and llm_result.suggestions:
+                return False, None, [(s, 0.95) for s in llm_result.suggestions]
 
-    # If exactly one substring match, auto-use it
-    if len(substring_matches) == 1:
-        return True, substring_matches[0], []
-
-    # If multiple substring matches, check if several start with the query (prefix group).
-    # In that case, skip the LLM tiebreaker and always ask the user to pick.
-    if len(substring_matches) > 1:
-        prefix_matches = [name for name in substring_matches if name.lower().startswith(service_lower)]
-        if len(prefix_matches) > 1:
-            suggestions = [(name, 0.95) for name in substring_matches]
-            return False, None, suggestions
-        if llm:
-            narrowed_records = [
-                row
-                for row in records
-                if (row_service := _get_case_insensitive(row, ["service", "item", "name"]))
-                and str(row_service).strip() in substring_matches
-            ]
-            matched_name = _llm_match_service(service_value, narrowed_records, llm)
-            if matched_name:
-                return True, matched_name, []
-        # Return as suggestions so user can choose
-        suggestions = [(name, 0.95) for name in substring_matches]
-        return False, None, suggestions
-
-    # No exact match, find nearest with fuzzy matching
+    # Fuzzy fallback when LLM is disabled or returns no_match
     nearest = find_nearest_services(service_value, records, top_n=5)
-
-    # Check if any are above threshold
     good_matches = [(name, score) for name, score in nearest if score >= threshold]
-    if good_matches and llm:
-        narrowed_records = [
-            row
-            for row in records
-            if (row_service := _get_case_insensitive(row, ["service", "item", "name"]))
-            and str(row_service).strip() in {name for name, _score in good_matches}
-        ]
-        matched_name = _llm_match_service(service_value, narrowed_records, llm)
-        if matched_name:
-            return True, matched_name, []
     if good_matches:
         return False, None, good_matches
-
-    if llm:
-        matched_name = _llm_match_service(service_value, records, llm)
-        if matched_name:
-            return True, matched_name, []
-
-    # No good matches at all
     return False, None, nearest
 
 
