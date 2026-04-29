@@ -59,6 +59,7 @@ class ControlPlaneInterface:
         self._sales_bot_handler: SalesBotHandler = sales_bot_handler
         self._query_bot_handler: QueryBotHandler = query_bot_handler
         self._sales_group_id = (os.getenv("SALES_GROUP_ID") or "").strip()
+        self._test_chat_id = (os.getenv("TEST_ID") or "").strip()
         self._allowed_chat_ids = {
             item.strip() for item in os.getenv("QUERYBOT_ALLOWED_CHAT_IDS", "").split(",") if item.strip()
         }
@@ -72,7 +73,10 @@ class ControlPlaneInterface:
             message.sender_id,
             len(message.text or ""),
         )
-        if message.source == "telegram" and message.is_group:
+        is_test_chat = bool(self._test_chat_id and message.chat_id == self._test_chat_id)
+        if message.source == "telegram" and is_test_chat:
+            logger.info("Bypassing routing filters for TEST_ID chat_id=%s", message.chat_id)
+        elif message.source == "telegram" and message.is_group:
             # For group messages, check against sales group ID
             if self._sales_group_id and message.chat_id != self._sales_group_id:
                 logger.debug("Ignoring message outside sales group (chat_id=%s)", message.chat_id)
