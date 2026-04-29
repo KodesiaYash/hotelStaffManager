@@ -40,17 +40,19 @@ def build_correction_request_message(
         sender_id=sender_id,
         sender_name=sender_name,
     )
+    fields_list = ", ".join(validation_failures)
     prompt = (
         "You are SalesBot speaking to hotel staff over WhatsApp. "
         "Write a short, warm, human-sounding message asking the user to provide the missing booking details. "
-        "Do not sound like a form, template, or machine. "
-        "Keep it concise and practical.\n\n"
-        "STRICT RULE: Ask ONLY about the exact fields listed in 'Validation failures' below. "
-        "Do NOT add, infer, or mention any other fields — even if the extracted data looks incomplete. "
-        "The validation failures list is the single authoritative source of what is missing.\n\n"
+        "Do not sound like a form, template, or machine.\n\n"
+        "STRICT RULES:\n"
+        f"1. You MUST ask for ALL of the following fields — every single one — in ONE message: {fields_list}\n"
+        "2. Do NOT omit any field from the list, even if you think it is less important.\n"
+        "3. Do NOT add any field not in the list above.\n"
+        "4. Encourage the user to reply with everything at once in any order.\n\n"
         "Recent operating context:\n"
         f"{memory_context}\n\n"
-        f"Validation failures (the ONLY fields to ask about): {validation_failures}\n\n"
+        f"Fields to ask about (ALL required): {validation_failures}\n\n"
         "Return only the WhatsApp message text."
     )
     return _generate_text(prompt, fallback)
@@ -129,59 +131,100 @@ def interpret_combined_reply(
     or just: 'Palmerie' or '1' or 'Camel Ride Agafay 25/4 room paradise'.
     """
     suggestion_names = [name for name, _ in suggestions]
-    missing_section = ""
-    if missing_fields:
-        missing_section = (
-            "Missing fields to also extract from the reply (if provided): "
-            + json.dumps(missing_fields)
-            + "\n"
+
+    if not suggestions:
+        missing_label = ", ".join(missing_fields) if missing_fields else "unknown fields"
+        prompt = (
+            "You are extracting booking field values from a hotel staff member's short reply.\n"
+            "The staff member was asked to provide these missing booking details: "
+            f"{missing_label}\n\n"
+            "The reply may contain one or more of these values in any order, with or without labels, "
+            "in informal or shorthand style.\n\n"
+            "Extraction rules:\n"
+            "DATE: Accept any date format (25/04, 25 april, 25-04-2026, etc.). "
+            "Convert to DD/MM/YYYY. If year is missing, use the current or nearest future year. "
+            "Leave empty string if no date found.\n"
+            "TIME: Accept any time format (9pm, 21:00, 9h, 09:30, 9:30am, 9-10pm → take start = 21:00). "
+            "Convert to HH:MM 24-hour. If only hour given (9pm → 21:00). "
+            "Leave empty string if no time found.\n"
+            "ROOM: A room name is typically a common word or name (e.g. Lily, Rose, Fez, Paradise, "
+            "Atlas, Suite, Garden). If the reply is a single word that is not a time, date, or hotel name, "
+            "it is most likely the room name. Assign it to Room. Leave empty string only if genuinely unclear.\n"
+            "HOTELNAME: Normalize to exactly 'RIAD Persephone' or 'RIAD Roxanne'. "
+            "Accept typos/abbreviations. Leave empty string if not found.\n\n"
+            "Examples:\n"
+            "- Reply='Lily' when Room is missing → Room='Lily'\n"
+            "- Reply='5pm' when Time is missing → Time='17:00'\n"
+            "- Reply='Lily, 5pm' when Time and Room missing → Room='Lily', Time='17:00'\n"
+            "- Reply='Rose 25/04 9pm' → Room='Rose', Date='25/04/2026', Time='21:00'\n\n"
+            "Return ONLY valid JSON:\n"
+            '{\n'
+            '  "service": "",\n'
+            '  "service_confidence": "low",\n'
+            '  "fields": {\n'
+            '    "Date": "DD/MM/YYYY or empty",\n'
+            '    "Time": "HH:MM or empty",\n'
+            '    "Room": "name or empty",\n'
+            '    "HotelName": "RIAD Persephone or RIAD Roxanne or empty"\n'
+            '  }\n'
+            '}\n\n'
+            f'User reply: "{user_reply}"\n'
         )
-    prompt = (
-        "You are parsing a hotel staff member's reply to a SalesBot clarification request.\n"
-        "The staff member was asked to:\n"
-        f"  1. Clarify which service they meant (original unclear value: '{original_service}')\n"
-        f"     Possible services: {suggestion_names}\n"
-        f"  2. Provide missing booking fields: {missing_fields}\n\n"
-        "The reply may contain some or all of this information in any order, with or without labels, "
-        "with or without commas, in informal or shorthand style.\n\n"
-        "Rules for extracting each field:\n"
-        "SERVICE: Match the reply against the possible services. Accept partial names, short forms, "
-        "numbers (1 = first suggestion, 2 = second, etc.), ordinals (first, second), "
-        "or informal phrases ('I meant X', 'its X'). Leave empty string if genuinely unclear.\n"
-        "DATE: Accept any date format (25/04, 25 april, april 25, 25-04-2026, etc.). "
-        "Convert to DD/MM/YYYY. If year is missing, use the current or nearest future year. "
-        "Leave empty string if no date found.\n"
-        "TIME: Accept any time format (9pm, 21:00, 9, 9h, 09:30, 9:30am, 9-10pm take minimum = 21:00). "
-        "Convert to HH:MM 24-hour format. If only hour given (e.g. '9pm'), use HH:00. "
-        "If a range is given (e.g. '9-11pm'), take the start time. "
-        "Leave empty string if no time found.\n"
-        "ROOM: Accept any room name as-is. Leave empty string if not found.\n"
-        "HOTELNAME: Normalize to exactly 'RIAD Persephone' or 'RIAD Roxanne'. "
-        "Accept typos/abbreviations (persephon, roxann, riad p, riad r). "
-        "Leave empty string if not found.\n\n"
-        f"{missing_section}"
-        "Examples:\n"
-        "- Reply='Palmerie, 25/04, 9pm, Paradise, RIAD Persephone' with suggestions=['Camel Ride Agafay','Camel Ride Palmeraie']\n"
-        "  → service='Camel Ride Palmeraie', Date='25/04/2026', Time='21:00', Room='Paradise', HotelName='RIAD Persephone'\n"
-        "- Reply='1 tomorrow 8am' with suggestions=['Hammam 1h','Hammam + Massage']\n"
-        "  → service='Hammam 1h', Date='<tomorrow as DD/MM/YYYY>', Time='08:00'\n"
-        "- Reply='camel agafay' with suggestions=['Camel Ride Agafay','Camel Ride Palmeraie']\n"
-        "  → service='Camel Ride Agafay'\n"
-        "- Reply='9-11pm' (only time range provided)\n"
-        "  → Time='21:00' (start of range in 24h)\n\n"
-        "Return ONLY valid JSON:\n"
-        '{\n'
-        '  "service": "<exact suggestion name or empty string>",\n'
-        '  "service_confidence": "high|medium|low",\n'
-        '  "fields": {\n'
-        '    "Date": "DD/MM/YYYY or empty",\n'
-        '    "Time": "HH:MM or empty",\n'
-        '    "Room": "name or empty",\n'
-        '    "HotelName": "RIAD Persephone or RIAD Roxanne or empty"\n'
-        '  }\n'
-        '}\n\n'
-        f'User reply: "{user_reply}"\n'
-    )
+    else:
+        missing_section = ""
+        if missing_fields:
+            missing_section = (
+                "Missing fields to also extract from the reply (if provided): "
+                + json.dumps(missing_fields)
+                + "\n"
+            )
+        prompt = (
+            "You are parsing a hotel staff member's reply to a SalesBot clarification request.\n"
+            "The staff member was asked to:\n"
+            f"  1. Clarify which service they meant (original unclear value: '{original_service}')\n"
+            f"     Possible services: {suggestion_names}\n"
+            f"  2. Provide missing booking fields: {missing_fields}\n\n"
+            "The reply may contain some or all of this information in any order, with or without labels, "
+            "with or without commas, in informal or shorthand style.\n\n"
+            "Rules for extracting each field:\n"
+            "SERVICE: Match the reply against the possible services. Accept partial names, short forms, "
+            "numbers (1 = first suggestion, 2 = second, etc.), ordinals (first, second), "
+            "or informal phrases ('I meant X', 'its X'). Leave empty string if genuinely unclear.\n"
+            "DATE: Accept any date format (25/04, 25 april, april 25, 25-04-2026, etc.). "
+            "Convert to DD/MM/YYYY. If year is missing, use the current or nearest future year. "
+            "Leave empty string if no date found.\n"
+            "TIME: Accept any time format (9pm, 21:00, 9, 9h, 09:30, 9:30am, 9-10pm take minimum = 21:00). "
+            "Convert to HH:MM 24-hour format. If only hour given (e.g. '9pm'), use HH:00. "
+            "If a range is given (e.g. '9-11pm'), take the start time. "
+            "Leave empty string if no time found.\n"
+            "ROOM: A room name is typically a common word or name (e.g. Lily, Rose, Fez, Paradise, Atlas). "
+            "Accept any room name as-is. Leave empty string if not found.\n"
+            "HOTELNAME: Normalize to exactly 'RIAD Persephone' or 'RIAD Roxanne'. "
+            "Accept typos/abbreviations (persephon, roxann, riad p, riad r). "
+            "Leave empty string if not found.\n\n"
+            f"{missing_section}"
+            "Examples:\n"
+            "- Reply='Palmerie, 25/04, 9pm, Paradise, RIAD Persephone' with suggestions=['Camel Ride Agafay','Camel Ride Palmeraie']\n"
+            "  → service='Camel Ride Palmeraie', Date='25/04/2026', Time='21:00', Room='Paradise', HotelName='RIAD Persephone'\n"
+            "- Reply='1 tomorrow 8am' with suggestions=['Hammam 1h','Hammam + Massage']\n"
+            "  → service='Hammam 1h', Date='<tomorrow as DD/MM/YYYY>', Time='08:00'\n"
+            "- Reply='camel agafay' with suggestions=['Camel Ride Agafay','Camel Ride Palmeraie']\n"
+            "  → service='Camel Ride Agafay'\n"
+            "- Reply='9-11pm' (only time range provided)\n"
+            "  → Time='21:00' (start of range in 24h)\n\n"
+            "Return ONLY valid JSON:\n"
+            '{\n'
+            '  "service": "<exact suggestion name or empty string>",\n'
+            '  "service_confidence": "high|medium|low",\n'
+            '  "fields": {\n'
+            '    "Date": "DD/MM/YYYY or empty",\n'
+            '    "Time": "HH:MM or empty",\n'
+            '    "Room": "name or empty",\n'
+            '    "HotelName": "RIAD Persephone or RIAD Roxanne or empty"\n'
+            '  }\n'
+            '}\n\n'
+            f'User reply: "{user_reply}"\n'
+        )
     data = _generate_json(prompt)
     if not data:
         interp = _fallback_interpretation(user_reply=user_reply, suggestions=suggestions)
