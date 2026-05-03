@@ -23,25 +23,14 @@ class TelegramError(RuntimeError):
         self.payload = payload
 
 
-def _coerce_message_id_int(value: Any) -> int | None:
-    """Parse an integer message ID from a plain int, plain str, or
-    the internal composite format 'telegram:CHAT_ID:MESSAGE_ID'."""
-    if value is None:
-        return None
-    if isinstance(value, int):
-        return value
-    s = str(value).strip()
-    if ":" in s:
-        s = s.rsplit(":", 1)[-1]
-    try:
-        return int(s)
-    except (TypeError, ValueError):
-        return None
-
-
 def _coerce_reply_to(value: Any) -> int | None:
     """Telegram's reply_to_message_id is an integer. Accept str or int."""
-    return _coerce_message_id_int(value)
+    if value is None:
+        return None
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 class TelegramClient:
@@ -188,30 +177,6 @@ class TelegramClient:
             payload["caption"] = caption
         self._apply_parse_mode(payload)
         return self._request("sendDocument", json=payload)
-
-    def set_reaction(
-        self,
-        chat_id: str,
-        message_id: Any,
-        emoji: str,
-        *,
-        is_big: bool = False,
-    ) -> dict[str, Any]:
-        """Set an emoji reaction on a message via setMessageReaction."""
-        msg_id = _coerce_message_id_int(message_id)
-        if msg_id is None:
-            logger.warning("set_reaction: could not parse message_id=%r, skipping", message_id)
-            return {}
-        logger.info("Telegram set_reaction chat_id=%s message_id=%s emoji=%s", chat_id, msg_id, emoji)
-        return self._request(
-            "setMessageReaction",
-            json={
-                "chat_id": chat_id,
-                "message_id": msg_id,
-                "reaction": [{"type": "emoji", "emoji": emoji}],
-                "is_big": is_big,
-            },
-        )
 
     def get_messages(
         self,

@@ -22,8 +22,6 @@ class TelegramSender(Protocol):
 
     def send_document(self, *args: Any, **kwargs: Any) -> dict[str, Any]: ...
 
-    def set_reaction(self, *args: Any, **kwargs: Any) -> dict[str, Any]: ...
-
 
 @dataclass(frozen=True)
 class RetryPolicy:
@@ -84,6 +82,3 @@ class RetryingTelegramClient:
 
     def send_document(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
         return retry_call(lambda: self.client.send_document(*args, **kwargs), policy=self.policy)
-
-    def set_reaction(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
-        return retry_call(lambda: self.client.set_reaction(*args, **kwargs), policy=self.policy)

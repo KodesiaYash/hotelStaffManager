@@ -83,8 +83,6 @@ def check_and_handle_correction_reply(
     sender_id: str | None,
     sender_name: str | None,
     chat_id: str,
-    *,
-    reply_message_id: str | None = None,
 ) -> bool:
     return _check_and_handle_correction_reply(
         message,
@@ -93,7 +91,6 @@ def check_and_handle_correction_reply(
         chat_id,
         process_message_fn=process_message,
         llm_extract_fn=llm_extract,
-        reply_message_id=reply_message_id,
     )
 
 
@@ -131,9 +128,7 @@ def process_message(
             metadata={"message_id": message_id} if message_id else {},
         )
 
-    if chat_id and check_and_handle_correction_reply(
-        message, sender_id, sender_name, chat_id, reply_message_id=message_id
-    ):
+    if chat_id and check_and_handle_correction_reply(message, sender_id, sender_name, chat_id):
         logger.info("Message handled as correction reply chat_id=%s", chat_id)
         _update_result_details(result_details, status="handled_as_correction")
         return False
@@ -552,8 +547,6 @@ def process_message(
                 metadata={"sale_id": sale_id, "service": service, "hotel": hotel_name or extracted_hotel or ""},
             )
             _refresh_sales_summary(chat_id, sender_id)
-            from controlplane.control.bot.salesbot.services.messaging import react_on_message as _react
-            _react(chat_id, message_id, "✅")
         wrote_sale = True
         _update_result_details(
             result_details,
