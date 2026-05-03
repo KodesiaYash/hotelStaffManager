@@ -372,7 +372,9 @@ def _llm_match_service(
         "'Horse Ride Agafay' is a combo (horse riding + Agafay destination) — input only says 'agafay'.\n"
         "- Input='horse ride agafay', candidates include 'Agafay pack 1', 'Horse Ride Agafay': "
         "return matched='Horse Ride Agafay'. Input explicitly mentions both activity and location.\n"
-        "- Input='trans' or 'trans to airport': return matched='Transfer to airport'.\n"
+        "- Input='trans' or 'transfer to airport' or 'transfer from airport to riad': "
+        "if only one Transfer candidate exists (e.g., 'Transfer'), return matched='Transfer'. "
+        "Extra words like 'to airport', 'from airport', 'to riad' are context — match the base service.\n"
         "Return ONLY JSON in one of these formats:\n"
         '{"status": "matched", "match": "<exact candidate>"}\n'
         '{"status": "ambiguous", "suggestions": ["<candidate1>", "<candidate2>", ...]}\n'
