@@ -380,10 +380,14 @@ def _llm_match_service(
         f'Service to match: "{service_value}"\n'
         f"Candidates: {top_candidates}\n"
     )
+    import logging
+    _logger = logging.getLogger(__name__)
+    _logger.info("LLM service match: input='%s' top_candidates=%s", service_value, top_candidates)
     try:
         response = llm.generate(prompt)
     except Exception:
         return None
+    _logger.info("LLM service match response: %s", response[:500] if response else None)
     try:
         import json
 
@@ -395,6 +399,7 @@ def _llm_match_service(
     except Exception:
         return None
     status = str(data.get("status") or "").strip().lower()
+    _logger.info("LLM service match parsed: status=%s data=%s", status, data)
     if status == "matched":
         match_name = str(data.get("match") or "").strip()
         canonical = candidate_lookup.get(match_name.lower())

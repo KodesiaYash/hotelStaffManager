@@ -69,6 +69,11 @@ def _get_missing_mandatory_fields(entry: dict[str, Any]) -> list[str]:
         val = _get_case_insensitive(entry, keys)
         if not val or (isinstance(val, str) and not val.strip()):
             missing.append(label)
+            continue
+        if label == "Room" and isinstance(val, str):
+            _room_lower = val.strip().lower()
+            if any(kw in _room_lower for kw in ("riad", "roxanne", "persephone", "persephon")):
+                missing.append(label)
     return missing
 
 
